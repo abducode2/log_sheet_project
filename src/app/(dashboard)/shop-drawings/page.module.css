@@ -1,0 +1,100 @@
+
+.tabs {
+  display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--bg2);
+  font-size: 12px; font-weight: 500; color: var(--text2);
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.tab:hover { border-color: var(--border2); color: var(--text); }
+.tabActive  { font-weight: 600; background: var(--bg3); }
+.tabDot     { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.tabCount   {
+  background: var(--bg4); border-radius: 10px;
+  padding: 1px 7px; font-size: 10px;
+  font-family: var(--mono); color: var(--text2);
+}
+
+/* Revision rows — slightly indented background */
+.revRow td { background: #ffffff06; }
+.revRow:hover td { background: var(--bg3) !important; }
+
+.btnEdit {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 5px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text2); font-size: 11px; cursor: pointer;
+  font-family: inherit; transition: all .15s;
+}
+.btnEdit:hover { background: #1f6feb22; color: var(--blue); border-color: var(--blue); }
+
+.btnSave {
+  padding: 5px 10px; border-radius: 5px;
+  border: 1px solid #238636; background: #1a3a1a;
+  color: #56d364; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.btnSave:hover { background: #238636; color: #fff; }
+
+.btnCancel {
+  padding: 5px 9px; border-radius: 5px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text3); font-size: 12px; cursor: pointer;
+}
+.btnCancel:hover { color: var(--red); }
+
+.btnDel {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 5px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text3); cursor: pointer; transition: all .15s;
+}
+.btnDel:hover { background: #da363322; color: var(--red); border-color: #da363344; }
+
+/* ── Excel-style column filter ───────────────────────── */
+.colFilterBtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: none;
+  color: var(--text2); font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  padding: 4px 6px; border-radius: 4px;
+  white-space: nowrap;
+  transition: all .15s;
+}
+.colFilterBtn:hover { color: var(--text); background: var(--bg4); }
+.colFilterActive { color: var(--blue); font-size: 8px; }
+
+.colDropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  z-index: 100;
+  overflow: hidden;
+}
+.colSearchInput {
+  width: 100%;
+  background: var(--bg3);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 12px; color: var(--text);
+  font-family: inherit; outline: none;
+}
+.colOptions {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.colOption {
+  padding: 8px 12px;
+  font-size: 12px; color: var(--text2);
+  cursor: pointer; transition: background .1s;
+}
+.colOption:hover { background: var(--bg3); color: var(--text); }
+.colOptionActive  { background: var(--blue-dim); color: var(--blue); font-weight: 600; }

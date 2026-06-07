@@ -1,0 +1,70 @@
+
+.dropzone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius-xl);
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--bg2);
+}
+.dropzone:hover, .dragging {
+  border-color: var(--blue);
+  background: #1f6feb11;
+}
+.dropTitle { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.dropSub   { font-size: 12px; color: var(--text2); }
+.errorMsg  { font-size: 12px; color: var(--red); margin-top: 16px; }
+
+.loading {
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; padding: 80px; font-size: 14px; color: var(--text2);
+}
+
+.previewHeader {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; margin-bottom: 24px; gap: 16px;
+}
+.previewTitle { font-size: 16px; font-weight: 600; }
+.previewSub   { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+.sheetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.sheetCard {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  cursor: pointer; display: flex; align-items: center; gap: 12px;
+  transition: all .15s;
+}
+.sheetCard:hover  { border-color: var(--border2); }
+.sheetSelected    { border-color: var(--blue); background: #1f6feb11; }
+.sheetCheck       { flex-shrink: 0; color: var(--blue); }
+.sheetLabel       { font-size: 13px; font-weight: 500; }
+.sheetCount       { font-size: 11px; color: var(--text2); margin-top: 3px;
+                    font-family: var(--mono); }
+
+.doneHeader {
+  display: flex; align-items: center; gap: 16px;
+  padding: 24px; background: var(--bg2);
+  border: 1px solid #3fb95044; border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+.doneTitle { font-size: 16px; font-weight: 600; color: var(--green); }
+.doneSub   { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+.resultsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+.resultCard  {
+  border-radius: var(--radius); padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+.resultOk    { background: #3fb95011; border-color: #3fb95033; }
+.resultError { background: #f8514911; border-color: #f8514933; }
+.resultLabel { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.resultMsg   { font-size: 11px; color: var(--text2); }
