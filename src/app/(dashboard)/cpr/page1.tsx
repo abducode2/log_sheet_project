@@ -1,3 +1,4 @@
+
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -5,6 +6,7 @@ import Topbar from '@/components/layout/Topbar'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from '@/app/(dashboard)/shop-drawings/page.module.css'
+
 
 // ── Helpers ──────────────────────────────────────────────────────
 function calcVtime(sub: string | null, app: string | null): number | null {
@@ -16,13 +18,7 @@ function today(): string { return new Date().toISOString().slice(0, 10) }
 
 // ── Constants ────────────────────────────────────────────────────
 const ELEMENTS = [
-  { key:'ALL',  label:'الكل',     color:'#8b949e' },
-  { key:'ARC',  label:'معماري',   color:'#4caf50' },
-  { key:'CIV',  label:'إنشائي',   color:'#64b5f6' },
-  { key:'SUR',  label:'مساحة',    color:'#ffb74d' },
-  { key:'MEC',  label:'ميكانيكي', color:'#ce93d8' },
-  { key:'ELE',  label:'كهربائي',  color:'#ef9a9a' },
-  { key:'GEN',  label:'عام',      color:'#8b949e' },
+  { key:'CIV',  label:'مدني',   color:'#64b5f6' },
 ]
 
 const STATUS_OPTS = ['A','B','C','D','P']
@@ -38,21 +34,22 @@ const STATUS_BG: Record<string,{bg:string;color:string}> = {
   P:{ bg:'#444',    color:'#ccc' },
 }
 const EL_COLOR: Record<string,string> = {
-  ARC:'el-ar', CIV:'el-sc', SUR:'el-su', MEC:'el-me', ELE:'el-el', GEN:'el-gen'
+  CIV:'el-sc', 
 }
 
 const FIELDS: FieldDef[] = [
-  { key:'rfi_no',          label:'رقم RFI',          type:'text',   required:true },
-  { key:'subject',         label:'الموضوع',           type:'text',   required:true },
-  { key:'element',         label:'العنصر',            type:'select', required:true, 
-    options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
-  { key:'rev',             label:'رقم المراجعة',      type:'number' },
-  { key:'submission_date', label:'تاريخ التقديم',     type:'date' },
-  { key:'ac_co',           label:'حالة الاعتماد',     type:'select', 
-    options:['A','B','C','D','P'] },
-  { key:'approval_date',   label:'تاريخ الاعتماد',    type:'date' },
-  { key:'v_time',          label:'V.Time (أيام)',     type:'number' },
-  { key:'remarks',         label:'ملاحظات',           type:'textarea' },
+  { key:'cpr_no',         label:'رقم الطلب',        type:'text',   required:true },
+  { key:'description',    label:'وصف العنصر',       type:'text',   required:true },
+  { key:'location',       label:'الموقع',            type:'text',   required:true },
+  { key:'element',        label:'العنصر',            type:'select', required:true, options:['AR','SC','SU','ME','EL','GEN'] },
+  { key:'rev',            label:'رقم المراجعة',      type:'number' },
+  { key:'pour_date',      label:'تاريخ الصب',        type:'date' },
+  { key:'volume_m3',      label:'الحجم م³',          type:'number' },
+  { key:'mix_design',     label:'Mix Design',        type:'text' },
+  { key:'ac_co',          label:'حالة الاعتماد',     type:'select', options:['A','B','C','D','P'] },
+  { key:'approval_date',  label:'تاريخ الاعتماد',    type:'date' },
+  { key:'v_time',         label:'V.Time (أيام)',     type:'number' },
+  { key:'remarks',        label:'ملاحظات',           type:'textarea' },
 ]
 
 const PG = 20
@@ -60,41 +57,30 @@ const PG = 20
 interface Row {
   id: string
   no: number
-  rfi_no: string
-  subject: string
-  question: string | null
-  answer: string | null
+  cpr_no: string
+  request_no: string
+  description: string
+  location: string | null
+  element: string
+  rev: number
+  ac_co: string
+  pour_date: string | null
+  volume_m3: number | null
+  mix_design: string | null
   submission_date: string | null
-  response_date: string | null
-
+  approval_date: string | null
+  v_time: number | null
   remarks: string | null
-parent_id: string | null
+  parent_id: string | null
   is_archived: boolean
   revision_count: number
-rev: number
-element: string
-ac_co: string
-approval_date: string | null
-  v_time: number | null
-  
-
-  request_no?: string
-  description?: string
-  
-  
-  
-  
-  
-  
-  
-  
 }
 
 // Group rows: each group = root row + all its revisions
 interface Group {
   root_request_no: string
-  rows: Row[]
-  no: number
+  rows: Row[]          // sorted by rev asc
+  no: number           // display number (from first row)
   description: string
   element: string
 }
@@ -120,17 +106,16 @@ function groupRows(rows: Row[]): Group[] {
     const sorted = group.sort((a,b) => (a.rev??0) - (b.rev??0))
     const root   = sorted[0]
     return {
-      root_request_no: root.rfi_no ?? '',
-      description: root.subject ?? '',
+      root_request_no: root.request_no,
       rows: sorted,
       no:          root.no,
-      // description: root.description,
+      description: root.description,
       element:     root.element,
     }
   }).sort((a,b) => a.no - b.no)
 }
 
-export default function RfiPage() {
+export default function CprPage() {
   const supabase = createClient()
 
   const [activeEl, setActiveEl]     = useState('ALL')
@@ -142,7 +127,7 @@ export default function RfiPage() {
   const [filterSt, setFilterSt]     = useState('')
   // Column filters (Excel-style)
   const [colFilters, setColFilters] = useState<Record<string,string>>({
-    rfi_no: '', subject: '', element: '', submission_date: '', ac_co: '', rev: ''
+    cpr_no: '', description: '', location: '', element: '', pour_date: '', ac_co: '', rev: ''
   })
   const [openCol, setOpenCol]       = useState<string|null>(null)
   const [loading, setLoading]       = useState(true)
@@ -157,6 +142,8 @@ export default function RfiPage() {
 
   // Dialogs
   const [confirmC, setConfirmC]     = useState<Row|null>(null)
+
+  
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
@@ -166,7 +153,7 @@ export default function RfiPage() {
   const fetchCounts = useCallback(async () => {
     // Fetch all rows with id and parent_id to find roots only
     const { data } = await supabase
-      .from('requests_for_information')
+      .from('concrete_pour_requests')
       .select('id, parent_id, element')
     if (!data) return
 
@@ -189,7 +176,7 @@ export default function RfiPage() {
 
     // Fetch all rows for grouping
     let q = supabase
-      .from('requests_for_information')
+      .from('concrete_pour_requests')
       .select('*')
       .order('request_no', { ascending: true })
       .order('rev', { ascending: true })
@@ -204,6 +191,7 @@ export default function RfiPage() {
     let filtered = rows
 
     // Apply column filters
+   
     filtered = filtered.filter(r => {
       for (const [col, val] of Object.entries(colFilters)) {
         if (!val) continue
@@ -219,12 +207,14 @@ export default function RfiPage() {
       const matchingIds = new Set(
         rows
           .filter(r =>
-            (r.rfi_no          ?? '').toLowerCase().includes(s) ||
-            (r.subject         ?? '').toLowerCase().includes(s) ||
+            (r.cpr_no          ?? '').toLowerCase().includes(s) ||
+            (r.request_no      ?? '').toLowerCase().includes(s) ||
+            (r.description     ?? '').toLowerCase().includes(s) ||
+            (r.location        ?? '').toLowerCase().includes(s) ||
+            (r.mix_design      ?? '').toLowerCase().includes(s) ||
             (r.element         ?? '').toLowerCase().includes(s) ||
             (r.ac_co           ?? '').toLowerCase().includes(s) ||
-            (r.submission_date ?? '').toLowerCase().includes(s) ||
-            (r.question        ?? '').toLowerCase().includes(s) ||
+            (r.pour_date       ?? '').toLowerCase().includes(s) ||
             String(r.rev ?? '').includes(s)
           )
           .map(r => r.id)
@@ -298,7 +288,7 @@ export default function RfiPage() {
 
   async function getNextNo(): Promise<number> {
     const { data } = await supabase
-      .from('requests_for_information').select('no')
+      .from('concrete_pour_requests').select('no')
       .order('no', { ascending: false }).limit(1)
     return ((data?.[0]?.no ?? 0) as number) + 1
   }
@@ -313,7 +303,7 @@ export default function RfiPage() {
   function onEditDateChange(d: string) {
     setEditDate(d)
     const row = allRows.find(r => r.id === editingId)
-    const vt = calcVtime(row?.submission_date ?? null, d)
+    const vt = calcVtime(row?.pour_date ?? null, d)
     if (vt !== null) setEditVtime(String(vt))
   }
 
@@ -331,7 +321,7 @@ export default function RfiPage() {
 
     if (createRevision && editSt === 'C') {
       // Archive current
-      await supabase.from('requests_for_information').update({
+      await supabase.from('concrete_pour_requests').update({
         ac_co: 'C',
         approval_date: editDate || null,
         v_time: editVtime ? Number(editVtime) : null,
@@ -342,15 +332,17 @@ export default function RfiPage() {
       const nextNo  = await getNextNo()
       const nextRev = (row.rev ?? 0) + 1
       const newId   = crypto.randomUUID()
-      await supabase.from('requests_for_information').insert({
+      await supabase.from('concrete_pour_requests').insert({
         id:              newId,
         no:              nextNo,
-        rfi_no:          row.rfi_no,
-        subject:         row.subject,
+        cpr_no:          row.cpr_no ?? row.request_no,
+        request_no:      row.cpr_no ?? row.request_no,
+        description:     row.description,
+        location:        row.location,
         element:         row.element,
         rev:             nextRev,
         ac_co:           'P',
-        submission_date: today(),
+        pour_date:       today(),
         approval_date:   null,
         v_time:          null,
         remarks:         row.remarks,
@@ -360,7 +352,7 @@ export default function RfiPage() {
       })
 
     } else {
-      await supabase.from('requests_for_information').update({
+      await supabase.from('concrete_pour_requests').update({
         ac_co:         editSt,
         approval_date: editDate || null,
         v_time:        editVtime ? Number(editVtime) : null,
@@ -386,26 +378,26 @@ export default function RfiPage() {
     }
 
     setDeleting(true)
-    await supabase.from('requests_for_information').delete().eq('id', row.id)
+    await supabase.from('concrete_pour_requests').delete().eq('id', row.id)
     setConfirmDel(null); setDeleting(false)
     fetchData(); fetchCounts()
   }
 
   async function exportExcel() {
-    let q = supabase.from('requests_for_information').select('*').order('no')
+    let q = supabase.from('concrete_pour_requests').select('*').order('no')
     if (activeEl !== 'ALL') q = q.eq('element', activeEl)
     const { data: all } = await q
     const XLSX = await import('xlsx')
     const ws = XLSX.utils.json_to_sheet(all ?? [])
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'RFI')
-    XLSX.writeFile(wb, `rfi_P179.xlsx`)
+    XLSX.utils.book_append_sheet(wb, ws, 'Concrete Pour Request')
+    XLSX.writeFile(wb, `concrete_pour_requests_P179.xlsx`)
   }
 
   return (
     <>
       <Topbar
-        title="طلبات الاستيضاح — Request for Information"
+        title="طلبات الصب — Concrete Pour Request"
         sub={`MURCIA-2 Zone 06 · إجمالي ${counts.ALL ?? 0} طلب`}
         actions={<>
           <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
@@ -419,7 +411,7 @@ export default function RfiPage() {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            إضافة طلب RFI
+            إضافة طلب صب
           </button>
         </>}
       />
@@ -451,7 +443,7 @@ export default function RfiPage() {
           </div>
           {Object.values(colFilters).some(v => v) && (
             <button className="btn btn-ghost btn-sm" onClick={() =>
-              setColFilters({ rfi_no:'', subject:'', element:'', submission_date:'', ac_co:'', rev:'' })
+              setColFilters({ cpr_no:'', description:'', location:'', element:'', pour_date:'', ac_co:'', rev:'' })
             }>
               ✕ مسح الفلاتر
             </button>
@@ -473,12 +465,13 @@ export default function RfiPage() {
                   <th style={{width:40}}>#</th>
                   {/* Excel-style filter headers */}
                   {[
-                    { key:'rfi_no',         label:'رقم RFI',          w:undefined },
-                    { key:'subject',        label:'الموضوع',           w:undefined },
-                    { key:'element',        label:'العنصر',           w:70 },
-                    { key:'rev',            label:'Rev.',              w:55 },
-                    { key:'submission_date',label:'تاريخ التقديم',    w:undefined },
-                    { key:'ac_co',          label:'الحالة',           w:160 },
+                    { key:'cpr_no',      label:'رقم CPR',        w:undefined },
+                    { key:'description', label:'وصف العنصر',     w:undefined },
+                    { key:'location',    label:'الموقع',          w:110 },
+                    { key:'element',     label:'العنصر',         w:70 },
+                    { key:'rev',         label:'Rev.',            w:55 },
+                    { key:'pour_date',   label:'تاريخ الصب',     w:undefined },
+                    { key:'ac_co',       label:'الحالة',         w:130 },
                   ].map(col => (
                     <th key={col.key} style={col.w ? {width:col.w} : {}} onClick={e => e.stopPropagation()}>
                       <div style={{ position:'relative' }}>
@@ -528,23 +521,25 @@ export default function RfiPage() {
                   ))}
                   <th>تاريخ الاعتماد</th>
                   <th style={{width:70}}>V.Time</th>
+                  <th style={{width:70}}>م³</th>
+                  <th style={{width:100}}>Mix Design</th>
                   <th style={{width:120}}>إجراء</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={11}>
+                  <tr><td colSpan={13}>
                     <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
                   </td></tr>
                 ) : groups.length === 0 ? (
-                  <tr><td colSpan={11}>
+                  <tr><td colSpan={13}>
                     <div className="empty-state">
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
                       </svg>
-                      <div className="empty-title">لا توجد طلبات استيضاح</div>
-                      <div className="empty-sub">ابدأ بإضافة طلب RFI جديد أو استورد من Excel</div>
+                      <div className="empty-title">لا توجد طلبات صب</div>
+                      <div className="empty-sub">ابدأ بإضافة طلب صب جديد أو استورد من Excel</div>
                     </div>
                   </td></tr>
                 ) : groups.map((group, gi) => (
@@ -567,17 +562,20 @@ export default function RfiPage() {
                           {isFirst ? group.no : ''}
                         </td>
 
-                        {/* rfi_no — show in every row */}
+                        {/* cpr_no — show in every row */}
                         <td className="cell-mono cell-blue">
-                          {row.rfi_no}
+                          {row.cpr_no ?? row.request_no}
                         </td>
 
-                        {/* subject — show in every row */}
+                        {/* description — show in every row */}
                         <td>
-                          <span className="cell-desc" title={row.subject}>
-                            {row.subject}
+                          <span className="cell-desc" title={row.description}>
+                            {row.description}
                           </span>
                         </td>
+
+                        {/* location */}
+                        <td style={{ fontSize:11, color:'var(--text2)' }}>{row.location ?? '—'}</td>
 
                         {/* element — show in every row */}
                         <td>
@@ -587,8 +585,8 @@ export default function RfiPage() {
                         {/* Rev */}
                         <td className="cell-mono cell-muted">{row.rev}</td>
 
-                        {/* Submission date */}
-                        <td className="cell-mono cell-muted">{row.submission_date ?? '—'}</td>
+                        {/* Pour date */}
+                        <td className="cell-mono cell-muted">{row.pour_date ?? '—'}</td>
 
                         {/* Status — solid color like screenshot */}
                         <td style={{ padding:'6px 14px' }}>
@@ -623,9 +621,6 @@ export default function RfiPage() {
                           )}
                         </td>
 
-                        {/* Response date */}
-                        <td className="cell-mono" style={{ color:'var(--text2)' }}>{row.response_date ?? '—'}</td>
-
                         {/* V.Time */}
                         <td>
                           {isEditing ? (
@@ -642,6 +637,12 @@ export default function RfiPage() {
                             </span>
                           )}
                         </td>
+
+                        {/* volume_m3 */}
+                        <td className="cell-mono" style={{ color:'var(--text2)' }}>{row.volume_m3 != null ? `${row.volume_m3} م³` : '—'}</td>
+
+                        {/* mix_design */}
+                        <td style={{ fontSize:11, color:'var(--text2)' }}>{row.mix_design ?? '—'}</td>
 
                         {/* Actions */}
                         <td>
@@ -686,7 +687,7 @@ export default function RfiPage() {
       {/* Add Modal */}
       {showAdd && (
         <AddRecordModal
-          table="requests_for_information" title="إضافة طلب RFI جديد"
+          table="concrete_pour_requests" title="إضافة طلب صب جديد"
           fields={FIELDS} onClose={() => setShowAdd(false)}
           onSaved={() => { fetchData(); fetchCounts() }}
           autoNumber={{ field:'no', getNext: getNextNo }}
@@ -836,11 +837,11 @@ export default function RfiPage() {
             <div style={{ background:'var(--bg3)', border:'1px solid #da363333',
               borderRadius:'var(--radius)', padding:16, marginBottom:20 }}>
               <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--blue)', marginBottom:4 }}>
-                {confirmDel.rfi_no}
+                {confirmDel.cpr_no ?? confirmDel.request_no}
               </div>
-              <div style={{ fontSize:13, marginBottom:8 }}>{confirmDel.subject}</div>
+              <div style={{ fontSize:13, marginBottom:8 }}>{confirmDel.description}</div>
               <div style={{ fontSize:11, color:'var(--text3)' }}>
-                REV.{confirmDel.rev} · {confirmDel.element} · {confirmDel.ac_co}
+                REV.{confirmDel.rev} · {confirmDel.location ?? ''} · {confirmDel.element} · {confirmDel.ac_co}
               </div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
