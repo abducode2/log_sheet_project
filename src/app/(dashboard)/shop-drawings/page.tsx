@@ -139,10 +139,6 @@ export default function ShopDrawingsPage() {
 
   // Dialogs
   const [confirmC, setConfirmC]     = useState<Row|null>(null)
-
-  const [newRevNo,  setNewRevNo]    = useState('')
-  const [newRevDesc,setNewRevDesc]  = useState('')
-  const [newRevEl,  setNewRevEl]    = useState('')
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
