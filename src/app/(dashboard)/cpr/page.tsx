@@ -139,6 +139,8 @@ export default function CprPage() {
   const [editSt, setEditSt]         = useState('')
   const [editDate, setEditDate]     = useState('')
   const [editVtime, setEditVtime]   = useState('')
+  const [editVolume, setEditVolume] = useState('')
+  const [editMix, setEditMix]       = useState('')
   const [saving, setSaving]         = useState(false)
 
   // Dialogs
@@ -314,6 +316,8 @@ export default function CprPage() {
     setEditSt(row.ac_co ?? 'P')
     setEditDate(row.approval_date ?? '')
     setEditVtime(row.v_time?.toString() ?? '')
+    setEditVolume(row.volume_m3?.toString() ?? '')
+    setEditMix(row.mix_design ?? '')
   }
 
   function onEditDateChange(d: string) {
@@ -341,6 +345,9 @@ export default function CprPage() {
         ac_co: 'C',
         approval_date: editDate || null,
         v_time: editVtime ? Number(editVtime) : null,
+        mix_design: editMix || row.mix_design || null,
+        volume_m3:  editVolume ? Number(editVolume) : row.volume_m3 ?? null,
+
         is_archived: true,
       }).eq('id', id)
 
@@ -361,6 +368,8 @@ export default function CprPage() {
         pour_date:       today(),
         approval_date:   null,
         v_time:          null,
+        mix_design:      editMix || row.mix_design || null,
+        volume_m3:       editVolume ? Number(editVolume) : row.volume_m3 ?? null,
         remarks:         row.remarks,
         parent_id:       id,
         is_archived:     false,
@@ -372,6 +381,8 @@ export default function CprPage() {
         ac_co:         editSt,
         approval_date: editDate || null,
         v_time:        editVtime ? Number(editVtime) : null,
+        mix_design:    editMix || null,
+        volume_m3:     editVolume ? Number(editVolume) : null,
       }).eq('id', id)
     }
 
@@ -655,10 +666,26 @@ export default function CprPage() {
                         </td>
 
                         {/* volume_m3 */}
-                        <td className="cell-mono" style={{ color:'var(--text2)' }}>{row.volume_m3 != null ? `${row.volume_m3} م³` : '—'}</td>
+                        <td className="cell-mono" style={{ color:'var(--text2)' }}>
+                          {isEditing ? (
+                            <input type="number" className="form-input"
+                              style={{ padding:'4px 8px', fontSize:11, width:80 }}
+                              value={editVolume} onChange={e => setEditVolume(e.target.value)} />
+                          ) : (
+                            row.volume_m3 != null ? `${row.volume_m3} م³` : '—'
+                          )}
+                        </td>
 
                         {/* mix_design */}
-                        <td style={{ fontSize:11, color:'var(--text2)' }}>{row.mix_design ?? '—'}</td>
+                        <td style={{ fontSize:11, color:'var(--text2)' }}>
+                          {isEditing ? (
+                            <input type="text" className="form-input"
+                              style={{ padding:'4px 8px', fontSize:11, width:120 }}
+                              value={editMix} onChange={e => setEditMix(e.target.value)} />
+                          ) : (
+                            row.mix_design ?? '—'
+                          )}
+                        </td>
 
                         {/* Actions */}
                         <td>
