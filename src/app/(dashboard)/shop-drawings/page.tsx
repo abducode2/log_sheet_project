@@ -19,11 +19,11 @@ function today(): string { return new Date().toISOString().slice(0, 10) }
 // ── Constants ────────────────────────────────────────────────────
 const ELEMENTS = [
   { key:'ALL', label:'الكل',     color:'#8b949e' },
-  { key:'AR',  label:'معماري',   color:'#4caf50' },
-  { key:'SC',  label:'إنشائي',   color:'#64b5f6' },
-  { key:'SU',  label:'مساحة',    color:'#ffb74d' },
-  { key:'ME',  label:'ميكانيكي', color:'#ce93d8' },
-  { key:'EL',  label:'كهربائي',  color:'#ef9a9a' },
+  { key:'ARC',  label:'معماري',   color:'#4caf50' },
+  { key:'CIV',  label:'إنشائي',   color:'#64b5f6' },
+  { key:'SUR',  label:'مساحة',    color:'#ffb74d' },
+  { key:'MEC',  label:'ميكانيكي', color:'#ce93d8' },
+  { key:'ELE',  label:'كهربائي',  color:'#ef9a9a' },
   { key:'GEN', label:'عام',      color:'#8b949e' },
 ]
 
@@ -40,7 +40,7 @@ const STATUS_BG: Record<string,{bg:string;color:string}> = {
   P:{ bg:'#444',    color:'#ccc' },
 }
 const EL_COLOR: Record<string,string> = {
-  AR:'el-ar', SC:'el-sc', SU:'el-su', ME:'el-me', EL:'el-el', GEN:'el-gen'
+  ARC:'el-ar', CIV:'el-sc', SUR:'el-su', MEC:'el-me', ELE:'el-el', GEN:'el-gen'
 }
 
 const FIELDS: FieldDef[] = [
@@ -142,9 +142,6 @@ export default function ShopDrawingsPage() {
   // Dialogs
   const [confirmC, setConfirmC]     = useState<Row|null>(null)
 
-  const [newRevNo,  setNewRevNo]    = useState('')
-  const [newRevDesc,setNewRevDesc]  = useState('')
-  const [newRevEl,  setNewRevEl]    = useState('')
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
