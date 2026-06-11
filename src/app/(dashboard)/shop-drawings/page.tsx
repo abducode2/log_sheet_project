@@ -46,7 +46,7 @@ const EL_COLOR: Record<string,string> = {
 const FIELDS: FieldDef[] = [
   { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true },
   { key:'description',    label:'وصف الرسم',      type:'text',   required:true },
-  { key:'element',        label:'العنصر',         type:'select', required:true, options:['AR','SC','SU','ME','EL','GEN'] },
+  { key:'element',        label:'العنصر',         type:'select', required:true, options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
   { key:'rev',            label:'رقم المراجعة',   type:'number' },
   { key:'submission_date',label:'تاريخ التقديم',  type:'date' },
   { key:'ac_co',          label:'حالة الاعتماد',  type:'select', options:['A','B','C','D','P'] },
