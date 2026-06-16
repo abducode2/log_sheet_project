@@ -5,7 +5,7 @@ import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
-import styles from '@/app/dashboard.module.css'
+import styles from '@/app/(dashboard)/dashboard.module.css'
 import { generateForm } from '@/lib/utils/generateForm'
 import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
