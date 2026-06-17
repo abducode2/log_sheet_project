@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import styles from '@/app/(dashboard)/dashboard.module.css'
 import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
@@ -29,6 +30,9 @@ const PG = 20
 function LettersPage({ table, title, addTitle, exportFile }: Props) {
   const supabase = createClient()
   const { isAdmin, isEditor } = useRole()
+  const { t } = useLanguage()
+  const p = t.pages.letters
+  const dc = t.docs
 
   const [data, setData]         = useState<Row[]>([])
   const [total, setTotal]       = useState(0)
@@ -89,7 +93,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
   }
 
   async function saveAdd() {
-    if (!newNo || !newSub) { setAddErr('رقم الخطاب والموضوع مطلوبان'); return }
+    if (!newNo || !newSub) { setAddErr(p.requiredError); return }
     setSaving(true)
     const nextNo = await getNextNo()
     const { error } = await supabase.from(table).insert({
@@ -138,24 +142,24 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
   const hasFilter = Object.values(colFilters).some(v => v)
 
   const COL_HEADERS = [
-    { key:'letter_no', label:'رقم الخطاب',    w:160 },
-    { key:'subject',   label:'موضوع الخطاب',  w:undefined },
-    { key:'date',      label:'تاريخ الخطاب',  w:130 },
+    { key:'letter_no', label: p.cols.letterNo, w:160 },
+    { key:'subject',   label: p.cols.subject,  w:undefined },
+    { key:'date',      label: p.cols.date,     w:130 },
   ]
 
   return (
     <>
       <Topbar
         title={title}
-        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${total} خطاب`}
+        sub={`HARAJ-IQC-ALRAWAF · ${p.sub.replace('{n}', String(total))}`}
         actions={<>
-         
+
           {isEditor && (
             <button className="btn btn-primary btn-sm" onClick={openAdd}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            إضافة خطاب
+            {p.addBtn}
             </button>
           )}
         </>}
@@ -169,17 +173,17 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
             <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <input placeholder="بحث في الخطابات..." value={search}
+            <input placeholder={p.searchPlaceholder} value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}/>
           </div>
           {hasFilter && (
             <button className="btn btn-ghost btn-sm"
               onClick={() => { setColFilters({ letter_no:'', subject:'', date:'' }); setPage(1) }}>
-              ✕ مسح الفلاتر
+              {dc.clearFilters}
             </button>
           )}
           <span style={{ fontSize:11, color:'var(--text3)', marginRight:'auto' }}>
-            {total} خطاب · صفحة {page} من {pages}
+            {p.paginationInfo.replace('{total}',String(total)).replace('{page}',String(page)).replace('{pages}',String(pages))}
           </span>
         </div>
 
@@ -226,14 +230,14 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                       </div>
                     </th>
                   ))}
-                  <th style={{width:110}}>إجراء</th>
-                  <th style={{width:90}}>PDF</th>
+                  <th style={{width:110}}>{p.cols.action}</th>
+                  <th style={{width:90}}>{p.cols.pdf}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={5}>
-                    <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
+                    <div className="loading-overlay"><div className="spinner"/><span>{t.common.loading}</span></div>
                   </td></tr>
                 ) : data.length === 0 ? (
                   <tr><td colSpan={5}>
@@ -242,8 +246,8 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
                         <polyline points="9 22 9 12 15 12 15 22"/>
                       </svg>
-                      <div className="empty-title">لا توجد خطابات</div>
-                      <div className="empty-sub">ابدأ بإضافة خطاب جديد أو استورد من Excel</div>
+                      <div className="empty-title">{p.empty}</div>
+                      <div className="empty-sub">{p.emptySub}</div>
                     </div>
                   </td></tr>
                 ) : data.map(row => (
@@ -294,7 +298,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                             </svg>
-                            تعديل
+                            {t.common.edit}
                           </button>
                            <button className={styles.btnDel} onClick={() => setConfirmDel(row)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -305,7 +309,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                           </button>
                         </div>
                         ) : (
-                          <span style={{ color:'var(--text2)', fontSize:11 }}>غير مصرح</span>
+                          <span style={{ color:'var(--text2)', fontSize:11 }}>—</span>
                         )
                       )}
                     </td>
@@ -315,7 +319,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                       {uploadingId === row.id ? (
                         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                           <div className="spinner" style={{width:16,height:16}}/>
-                          <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                          <span style={{fontSize:9,color:'var(--text3)'}}>{dc.pdf.uploading}</span>
                         </div>
                       ) : row.pdf_url ? (
                         <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
@@ -337,12 +341,12 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                               <polyline points="14 2 14 8 20 8"/>
                             </svg>
-                            عرض
+                            {t.common.view}
                           </button>
                           {(isEditor || isAdmin) && (
                             <button
                               onClick={async () => {
-                                if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
+                                if (!confirm(dc.pdf.deleteConfirm)) return
                                 await fetch('/api/cloudinary-delete', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
@@ -352,13 +356,13 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                                   .from(table)
                                   .update({ pdf_url: null })
                                   .eq('id', row.id)
-                                if (error) { alert('خطأ في الحذف: ' + error.message); return }
+                                if (error) { alert(dc.pdf.deleteErr + ': ' + error.message); return }
                                 setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r))
                               }}
                               style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
                                 background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
                             >
-                              حذف
+                              {t.common.delete}
                             </button>
                           )}
                         </div>
@@ -369,20 +373,20 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                           background:'var(--bg3)', border:'1px solid var(--border)',
                           color:'var(--text2)', fontSize:11, cursor:'pointer',
                           whiteSpace:'nowrap'
-                        }} title="رفع PDF إلى Cloudinary">
+                        }} title={t.common.upload}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                             <polyline points="17 8 12 3 7 8"/>
                             <line x1="12" y1="3" x2="12" y2="15"/>
                           </svg>
-                          رفع PDF
+                          {t.common.upload}
                           <input type="file" accept="application/pdf" style={{display:'none'}}
                             onChange={async e => {
                               const file = e.target.files?.[0]
                               if (!file) return
                               setUploadingId(row.id)
                               const { url, error } = await uploadToCloudinary(file, `p179/letters/${table}`)
-                              if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                              if (error) { alert(dc.pdf.uploadErr + ': ' + error); setUploadingId(null); return }
                               await supabase.from(table).update({ pdf_url: url }).eq('id', row.id)
                               setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r))
                               setUploadingId(null)
@@ -402,7 +406,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
 
           {/* Pagination */}
           <div className="pagination">
-            <span style={{ fontSize:11, color:'var(--text3)', marginLeft:'auto' }}>إجمالي {total} خطاب</span>
+            <span style={{ fontSize:11, color:'var(--text3)', marginLeft:'auto' }}>{t.common.total}: {total}</span>
             {Array.from({ length: Math.min(pages,7) }, (_,i) => (
               <button key={i} className={`pg-btn ${page===i+1?'active':''}`} onClick={() => setPage(i+1)}>
                 {i+1}
@@ -427,11 +431,11 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              تنزيل
+              {t.common.download}
             </a>
             <button onClick={() => setViewingPdf(null)}
               style={{background:'transparent',border:'1px solid var(--border)',borderRadius:6,padding:'6px 12px',color:'var(--text2)',cursor:'pointer',fontSize:12}}>
-              ✕ إغلاق
+              {dc.pdf.closeViewer}
             </button>
           </div>
           <iframe src={viewingPdf.url} style={{flex:1,border:'none',width:'100%'}} title="PDF Viewer"/>
@@ -449,29 +453,29 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
               <div className="form-group">
                 <label className="form-label">
-                  رقم الخطاب <span style={{color:'var(--red)'}}> *</span>
+                  {p.fields.letterNo} <span style={{color:'var(--red)'}}> *</span>
                 </label>
                 <input className="form-input" value={newNo} onChange={e => setNewNo(e.target.value)}
                   placeholder="M2P06-RWF-NAG-LTR-..."/>
               </div>
               <div className="form-group">
-                <label className="form-label">تاريخ الخطاب</label>
+                <label className="form-label">{p.fields.date}</label>
                 <input type="date" className="form-input" value={newDate} onChange={e => setNewDate(e.target.value)}/>
               </div>
               <div className="form-group" style={{ gridColumn:'1/-1' }}>
-                <label className="form-label">موضوع الخطاب <span style={{color:'var(--red)'}}> *</span></label>
-                <input className="form-input" value={newSub} onChange={e => setNewSub(e.target.value)} placeholder="موضوع الخطاب..."/>
+                <label className="form-label">{p.fields.subject} <span style={{color:'var(--red)'}}> *</span></label>
+                <input className="form-input" value={newSub} onChange={e => setNewSub(e.target.value)} placeholder="..."/>
               </div>
               <div className="form-group" style={{ gridColumn:'1/-1' }}>
-                <label className="form-label">ملاحظات</label>
+                <label className="form-label">{p.fields.remarks}</label>
                 <textarea className="form-input" rows={2} value={newRem} onChange={e => setNewRem(e.target.value)} style={{resize:'vertical'}}/>
               </div>
             </div>
             {addErr && <div style={{fontSize:12,color:'var(--red)',background:'#da363318',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'8px 12px',marginBottom:12}}>{addErr}</div>}
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
-              <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>{t.common.cancel}</button>
               <button className="btn btn-primary" onClick={saveAdd} disabled={saving}>
-                {saving ? <span className="spinner"/> : 'حفظ الخطاب'}
+                {saving ? <span className="spinner"/> : t.common.save}
               </button>
             </div>
           </div>
@@ -483,17 +487,17 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
         <div className="modal-overlay">
           <div className="modal" style={{ width:400 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{color:'var(--red)'}}>تأكيد الحذف</div>
+              <div className="modal-title" style={{color:'var(--red)'}}>{t.common.confirmDelete}</div>
             </div>
             <div style={{background:'var(--bg3)',border:'1px solid #da363333',borderRadius:'var(--radius)',padding:16,marginBottom:20}}>
               <div style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--blue)',marginBottom:4}}>{confirmDel.letter_no}</div>
               <div style={{fontSize:13}}>{confirmDel.subject}</div>
             </div>
             <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>{t.common.cancel}</button>
               <button style={{background:'#da363322',color:'var(--red)',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'7px 14px',fontSize:12,cursor:'pointer',fontFamily:'inherit'}}
                 onClick={() => deleteRow(confirmDel)} disabled={deleting}>
-                {deleting ? <span className="spinner"/> : 'حذف نهائياً'}
+                {deleting ? <span className="spinner"/> : t.common.delete}
               </button>
             </div>
           </div>

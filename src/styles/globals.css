@@ -466,6 +466,42 @@ tbody tr:hover { background: var(--bg3); }
 .toast-success { border-color: var(--green); color: var(--green); }
 .toast-error   { border-color: var(--red);   color: var(--red); }
 
+/* ── LTR overrides (English) ─────────────────────────────── */
+[dir="ltr"] body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; }
+
+[dir="ltr"] .sidebar {
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+[dir="ltr"] .nav-item  { text-align: left; }
+[dir="ltr"] .nav-count { margin-right: 0; margin-left: auto; }
+[dir="ltr"] .nav-dot   { order: -1; }
+
+[dir="ltr"] th { text-align: left; }
+
+[dir="ltr"] .search-icon {
+  left: auto;
+  right: 11px;
+}
+[dir="ltr"] .search-wrap input {
+  padding: 8px 36px 8px 12px;
+}
+
+[dir="ltr"] .topbar { flex-direction: row; }
+
+[dir="ltr"] .pagination { justify-content: flex-start; }
+[dir="ltr"] .pagination span { margin-left: 0; margin-right: auto; }
+
+[dir="ltr"] .table-header { flex-direction: row; }
+
+[dir="ltr"] .cell-desc { direction: ltr; }
+
+[dir="ltr"] .modal { text-align: left; }
+
+[dir="ltr"] .sidebar-footer { text-align: left; }
+
+[dir="ltr"] .form-label { text-align: left; }
+
 /* ── Animations ──────────────────────────────────────────── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }

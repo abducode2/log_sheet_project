@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import styles from './import.module.css'
 
 // ── Sheet → Table mapping ────────────────────────────────────────
@@ -221,6 +222,8 @@ const COL_RENAME: Record<string, Record<string, string>> = {
 export default function ImportPage() {
   const supabase = createClient()
   const { isAdmin, loading: roleLoading } = useRole()
+  const { t } = useLanguage()
+  const p = t.pages.import
   const [status, setStatus]     = useState<'idle'|'parsing'|'preview'|'importing'|'done'|'error'>('idle')
   const [sheets, setSheets]     = useState<SheetPreview[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -234,7 +237,7 @@ export default function ImportPage() {
 
   const processFile = useCallback(async (file: File) => {
     if (!file.name.match(/\.(xlsx|xlsm|xls)$/i)) {
-      setErrorMsg('يرجى رفع ملف Excel فقط (.xlsx, .xlsm, .xls)')
+      setErrorMsg(t.pages.import.fileTypeError)
       setStatus('error'); return
     }
     setStatus('parsing'); setErrorMsg('')
@@ -277,7 +280,7 @@ export default function ImportPage() {
       setSelected(new Set(previews.map(p => p.table)))
       setStatus('preview')
     } catch (e) {
-      setErrorMsg('فشل في قراءة الملف: ' + String(e))
+      setErrorMsg(t.pages.import.parseError + String(e))
       setStatus('error')
     }
   }, [])
@@ -509,14 +512,14 @@ export default function ImportPage() {
 
   if (!isAdmin) return (
     <>
-      <Topbar title="استيراد البيانات من Excel" sub="رفع ملف Excel وتعبئة قاعدة البيانات تلقائياً" />
+      <Topbar title={p.title} sub={p.sub} />
       <div className="page-content">
         <div className="empty-state">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red,#e53e3e)" strokeWidth="1.5">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          <div className="empty-title">غير مصرح بالوصول</div>
-          <div className="empty-sub">هذه الصفحة متاحة لمدير النظام فقط</div>
+          <div className="empty-title">{t.common.unauthorized}</div>
+          <div className="empty-sub">{t.common.unauthorizedSub}</div>
         </div>
       </div>
     </>
@@ -525,25 +528,25 @@ export default function ImportPage() {
   return (
     <>
       <Topbar
-        title="استيراد البيانات من Excel"
-        sub="رفع ملف Excel وتعبئة قاعدة البيانات تلقائياً"
+        title={p.title}
+        sub={p.sub}
         actions={<>
           <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            تحميل نموذج Excel
+            {p.downloadTemplate}
           </button>
           <button className="btn btn-primary btn-sm" onClick={exportAll} disabled={exporting}>
             {exporting ? (
-              <><span className="spinner" style={{width:13,height:13}}/> جارٍ التصدير... ({exportProgress}/10)</>
+              <><span className="spinner" style={{width:13,height:13}}/> {p.exporting} ({exportProgress}/10)</>
             ) : (
               <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              تصدير كل البيانات</>
+              {p.exportAll}</>
             )}
           </button>
         </>}
@@ -569,10 +572,10 @@ export default function ImportPage() {
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
-            <div className={styles.dropTitle}>اسحب ملف Excel هنا أو اضغط للاختيار</div>
-            <div className={styles.dropSub}>يدعم .xlsx · .xlsm · .xls</div>
+            <div className={styles.dropTitle}>{p.dropZoneTitle}</div>
+            <div className={styles.dropSub}>{p.formats}</div>
             <div className={styles.dropHint}>
-              الشيتات المدعومة: SHOP DRAWING · MATERIAL SUBMITTAL · SUPPLIER · INSPECTION REQUEST ·
+              SHOP DRAWING · MATERIAL SUBMITTAL · SUPPLIER · INSPECTION REQUEST ·
               CONCRETE POUR · RFI · NCR · TRANSMITTAL · RAWAF-NAGA · NAGA-RAWAF
             </div>
             {errorMsg && <div className={styles.errMsg}>{errorMsg}</div>}
@@ -583,7 +586,7 @@ export default function ImportPage() {
         {status === 'parsing' && (
           <div className={styles.loading}>
             <div className="spinner" style={{width:32,height:32,borderWidth:3}}/>
-            <div>جارٍ قراءة الملف وتحليل الشيتات...</div>
+            <div>{p.importing}</div>
           </div>
         )}
 
@@ -592,15 +595,15 @@ export default function ImportPage() {
           <div>
             <div className={styles.previewBar}>
               <div>
-                <div className={styles.previewTitle}>معاينة البيانات</div>
+                <div className={styles.previewTitle}>{p.preview}</div>
                 <div className={styles.previewSub}>
-                  تم العثور على {sheets.length} شيت · {sheets.reduce((s,sh)=>s+sh.count,0)} سجل إجمالي
+                  {sheets.length} · {sheets.reduce((s,sh)=>s+sh.count,0)} {p.rows}
                 </div>
               </div>
               <div style={{display:'flex',gap:10}}>
-                <button className="btn btn-ghost" onClick={()=>setStatus('idle')}>← اختر ملفاً آخر</button>
+                <button className="btn btn-ghost" onClick={()=>setStatus('idle')}>← {p.selectFile}</button>
                 <button className="btn btn-primary" onClick={startImport} disabled={!selected.size}>
-                  استيراد {totalRows} سجل من {selected.size} شيت
+                  {p.importSelected} ({totalRows} {p.rows})
                 </button>
               </div>
             </div>
@@ -619,8 +622,8 @@ export default function ImportPage() {
                     }
                   </div>
                   <div style={{flex:1}}>
-                    <div className={styles.sheetLabel}>{s.label}</div>
-                    <div className={styles.sheetMeta}>{s.sheetName} · {s.count} سجل</div>
+                    <div className={styles.sheetLabel}>{p.tableLabels[s.table as keyof typeof p.tableLabels] ?? s.label}</div>
+                    <div className={styles.sheetMeta}>{s.sheetName} · {s.count} {p.rows}</div>
                   </div>
                   <span className={styles.sheetCount}>{s.count}</span>
                 </div>
@@ -629,8 +632,8 @@ export default function ImportPage() {
 
             {sheets.length === 0 && (
               <div className="empty-state">
-                <div className="empty-title">لم يتم العثور على شيتات مطابقة</div>
-                <div className="empty-sub">تأكد أن أسماء الشيتات تحتوي على: SHOP DRAWING, RFI, NCR...</div>
+                <div className="empty-title">{p.previewSub}</div>
+                <div className="empty-sub">SHOP DRAWING, RFI, NCR...</div>
               </div>
             )}
           </div>
@@ -639,10 +642,10 @@ export default function ImportPage() {
         {/* ── Importing ── */}
         {status === 'importing' && (
           <div className={styles.importingWrap}>
-            <div style={{fontSize:16,fontWeight:600,marginBottom:24}}>جارٍ الاستيراد...</div>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:24}}>{p.importing}</div>
             {[...selected].map(table => (
               <div key={table} className={styles.progressRow}>
-                <div className={styles.progressLabel}>{TABLE_LABELS[table]}</div>
+                <div className={styles.progressLabel}>{p.tableLabels[table as keyof typeof p.tableLabels] ?? table}</div>
                 <div className={styles.progressBar}>
                   <div className={styles.progressFill}
                     style={{width: progress[table] ? '100%' : '0%',
@@ -665,9 +668,9 @@ export default function ImportPage() {
                 <polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
               <div>
-                <div className={styles.doneTitle}>اكتمل الاستيراد بالاستشاريح!</div>
+                <div className={styles.doneTitle}>{p.done}</div>
                 <div className={styles.doneSub}>
-                  {Object.values(results).reduce((s,r)=>s+r.success,0)} سجل تم استيراده
+                  {Object.values(results).reduce((s,r)=>s+r.success,0)} {p.rows}
                 </div>
               </div>
             </div>
@@ -675,9 +678,9 @@ export default function ImportPage() {
             <div className={styles.resultsGrid}>
               {Object.entries(results).map(([table, r]) => (
                 <div key={table} className={`${styles.resultCard} ${r.error?styles.resultErr:styles.resultOk}`}>
-                  <div className={styles.resultLabel}>{TABLE_LABELS[table]}</div>
+                  <div className={styles.resultLabel}>{p.tableLabels[table as keyof typeof p.tableLabels] ?? table}</div>
                   <div className={styles.resultCount}>
-                    {r.error ? `❌ ${r.error.slice(0,60)}` : `✅ ${r.success} سجل`}
+                    {r.error ? `❌ ${r.error.slice(0,60)}` : `✅ ${r.success} ${p.rows}`}
                   </div>
                 </div>
               ))}
@@ -685,10 +688,10 @@ export default function ImportPage() {
 
             <div style={{display:'flex',gap:12,marginTop:24}}>
               <button className="btn btn-primary" onClick={()=>window.location.href='/dashboard'}>
-                → الذهاب للوحة التحكم
+                → {t.nav.items.dashboard}
               </button>
               <button className="btn btn-ghost" onClick={()=>{setStatus('idle');setSheets([]);setResults({})}}>
-                استيراد ملف آخر
+                {p.importNew}
               </button>
             </div>
           </div>

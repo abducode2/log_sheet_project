@@ -1,9 +1,9 @@
-
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import styles from '@/app/(dashboard)/dashboard.module.css'
 import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
@@ -31,6 +31,22 @@ const PG = 20
 export default function NcrPage() {
   const supabase = createClient()
   const { isAdmin, isEditor } = useRole()
+  const { t } = useLanguage()
+  const p = t.pages.ncr
+
+  const STATUS_LABELS = useMemo(() => ({
+    Open:   t.status.open,
+    Closed: t.status.closed,
+  }), [t])
+
+  const COL_HEADERS = useMemo(() => [
+    { key:'ncr_no',      label: p.ncrNoCol,    w: 160 },
+    { key:'description', label: p.descCol,     w: undefined },
+    { key:'issue_date',  label: p.issueDate,   w: 130 },
+    { key:'close_date',  label: p.closeDate,   w: 130 },
+    { key:'status',      label: p.fields.status, w: 110 },
+  ], [p])
+
   const [data, setData]         = useState<Row[]>([])
   const [total, setTotal]       = useState(0)
   const [page, setPage]         = useState(1)
@@ -40,7 +56,6 @@ export default function NcrPage() {
   const [openCol, setOpenCol]   = useState<string|null>(null)
   const [colFilters, setColFilters] = useState({ ncr_no:'', description:'', issue_date:'', status:'' })
 
-  // Add
   const [showAdd, setShowAdd]   = useState(false)
   const [newNo,   setNewNo]     = useState('')
   const [newDesc, setNewDesc]   = useState('')
@@ -52,7 +67,6 @@ export default function NcrPage() {
   const [saving,  setSaving]    = useState(false)
   const [addErr,  setAddErr]    = useState('')
 
-  // Edit
   const [editId,    setEditId]    = useState<string|null>(null)
   const [editNo,    setEditNo]    = useState('')
   const [editDesc,  setEditDesc]  = useState('')
@@ -61,7 +75,6 @@ export default function NcrPage() {
   const [editSt,    setEditSt]    = useState('')
   const [editSaving,setEditSaving]= useState(false)
 
-  // Delete
   const [confirmDel, setConfirmDel] = useState<Row|null>(null)
   const [deleting,   setDeleting]   = useState(false)
   const [uploadingId, setUploadingId] = useState<string|null>(null)
@@ -93,7 +106,7 @@ export default function NcrPage() {
   }
 
   async function saveAdd() {
-    if (!newNo || !newDesc) { setAddErr('رقم التقرير والوصف مطلوبان'); return }
+    if (!newNo || !newDesc) { setAddErr(p.requiredError); return }
     setSaving(true)
     const nextNo = await getNextNo()
     const { error } = await supabase.from('non_conformance_reports').insert({
@@ -128,15 +141,6 @@ export default function NcrPage() {
     setConfirmDel(null); setDeleting(false); fetchData()
   }
 
-  async function exportExcel() {
-    const { data: all } = await supabase.from('non_conformance_reports').select('*').order('no')
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.json_to_sheet(all ?? [])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'NCR')
-    XLSX.writeFile(wb, 'ncr_P179.xlsx')
-  }
-
   function setColFilter(col: string, val: string) {
     setColFilters(prev => ({ ...prev, [col]: val })); setOpenCol(null); setPage(1)
   }
@@ -144,66 +148,54 @@ export default function NcrPage() {
   const pages = Math.ceil(total / PG) || 1
   const hasFilter = Object.values(colFilters).some(v=>v) || !!filterSt
 
-  const COL_HEADERS = [
-    { key:'ncr_no',      label:'رقم NCR',          w:160 },
-    { key:'description', label:'وصف عدم المطابقة', w:undefined },
-    { key:'issue_date',  label:'تاريخ الإصدار',    w:130 },
-    { key:'close_date',  label:'تاريخ الإغلاق',    w:130 },
-    { key:'status',      label:'الحالة',            w:110 },
-  ]
-
   return (
     <>
       <Topbar
-        title="تقارير عدم المطابقة — NCR"
-        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${total} تقرير`}
+        title={p.title}
+        sub={p.sub.replace('{n}', String(total))}
         actions={<>
-         
           {isEditor && (
             <button className="btn btn-primary btn-sm" onClick={() => {
-              setNewNo('');setNewDesc('');setNewIssue('');setNewClose('');
-              setNewSt('Open');setNewLoc('');setNewRem('');setAddErr('');setShowAdd(true)
+              setNewNo(''); setNewDesc(''); setNewIssue(''); setNewClose('')
+              setNewSt('Open'); setNewLoc(''); setNewRem(''); setAddErr(''); setShowAdd(true)
             }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              إضافة تقرير NCR
+              {p.addBtn}
             </button>
           )}
         </>}
       />
 
       <div className="page-content" onClick={() => setOpenCol(null)}>
-
-        {/* Status filter + search */}
         <div className="toolbar">
           <div className="search-wrap">
             <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <input placeholder="بحث في التقارير..." value={search}
+            <input placeholder={t.docs.searchAll} value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}/>
           </div>
-          {['','Open','Closed'].map(s => (
+          {['', 'Open', 'Closed'].map(s => (
             <button key={s}
-              className={`filter-chip ${filterSt===s?'active':''}`}
+              className={`filter-chip ${filterSt===s ? 'active' : ''}`}
               onClick={() => { setFilterSt(s); setPage(1) }}>
-              {s==='' ? `الكل (${total})` : s==='Open' ? 'مفتوح' : 'مغلق'}
+              {s === '' ? `${t.common.all} (${total})` : STATUS_LABELS[s as 'Open'|'Closed']}
             </button>
           ))}
           {hasFilter && (
             <button className="btn btn-ghost btn-sm"
               onClick={() => { setColFilters({ncr_no:'',description:'',issue_date:'',status:''}); setFilterSt(''); setPage(1) }}>
-              ✕ مسح
+              {t.docs.clearFilters}
             </button>
           )}
         </div>
 
-        {/* Table */}
         <div className="table-wrap">
           <div className="table-header">
-            <span className="table-title">تقارير عدم المطابقة</span>
-            <span className="table-meta">{total} تقرير · صفحة {page} من {pages}</span>
+            <span className="table-title">{p.title}</span>
+            <span className="table-meta">{total} {p.unit} · {t.common.page} {page} {t.common.of} {pages}</span>
           </div>
           <div className="table-scroll">
             <table>
@@ -225,27 +217,27 @@ export default function NcrPage() {
                         {openCol === col.key && (
                           <div className={styles.colDropdown} onClick={e => e.stopPropagation()}>
                             <input className={styles.colSearchInput}
-                              placeholder={`بحث في ${col.label}...`}
+                              placeholder={`${col.label}...`}
                               value={colFilters[col.key as keyof typeof colFilters]}
                               onChange={e => setColFilters(prev => ({...prev,[col.key]:e.target.value}))}
                               autoFocus/>
                             <div className={styles.colOptions}>
                               <div className={`${styles.colOption} ${!colFilters[col.key as keyof typeof colFilters]?styles.colOptionActive:''}`}
-                                onClick={() => setColFilter(col.key,'')}>الكل</div>
+                                onClick={() => setColFilter(col.key,'')}>{t.common.all}</div>
                             </div>
                           </div>
                         )}
                       </div>
                     </th>
                   ))}
-                  <th style={{width:110}}>إجراء</th>
-                  <th style={{width:90}}>PDF</th>
+                  <th style={{width:110}}>{t.docs.cols.action}</th>
+                  <th style={{width:90}}>{t.docs.cols.pdf}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={7}>
-                    <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
+                    <div className="loading-overlay"><div className="spinner"/><span>{t.common.loading}</span></div>
                   </td></tr>
                 ) : data.length === 0 ? (
                   <tr><td colSpan={7}>
@@ -254,8 +246,8 @@ export default function NcrPage() {
                         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                         <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                       </svg>
-                      <div className="empty-title">لا توجد تقارير عدم مطابقة</div>
-                      <div className="empty-sub">ابدأ بإضافة تقرير NCR جديد</div>
+                      <div className="empty-title">{p.empty}</div>
+                      <div className="empty-sub">{p.emptySub}</div>
                     </div>
                   </td></tr>
                 ) : data.map(row => {
@@ -265,81 +257,70 @@ export default function NcrPage() {
                     <tr key={row.id}>
                       <td className="cell-mono cell-dim">{row.no}</td>
 
-                      {/* ncr_no */}
                       <td>{isEditing
                         ? <input className="form-input" style={{padding:'4px 8px',fontSize:11}} value={editNo} onChange={e=>setEditNo(e.target.value)} autoFocus/>
                         : <span className="cell-mono cell-blue">{row.ncr_no}</span>}
                       </td>
 
-                      {/* description */}
                       <td>{isEditing
                         ? <input className="form-input" style={{padding:'4px 8px',fontSize:12}} value={editDesc} onChange={e=>setEditDesc(e.target.value)}/>
                         : <span className="cell-desc" title={row.description}>{row.description}</span>}
                       </td>
 
-                      {/* issue_date */}
                       <td>{isEditing
                         ? <input type="date" className="form-input" style={{padding:'4px 8px',fontSize:11}} value={editIssue} onChange={e=>setEditIssue(e.target.value)}/>
                         : <span className="cell-mono cell-muted">{row.issue_date ?? '—'}</span>}
                       </td>
 
-                      {/* close_date */}
                       <td>{isEditing
                         ? <input type="date" className="form-input" style={{padding:'4px 8px',fontSize:11}} value={editClose} onChange={e=>setEditClose(e.target.value)}/>
                         : <span className="cell-mono cell-muted">{row.close_date ?? '—'}</span>}
                       </td>
 
-                      {/* status */}
                       <td style={{padding:'6px 14px'}}>
                         {isEditing ? (
                           <select className="form-select" style={{padding:'4px 8px',fontSize:11}}
                             value={editSt} onChange={e=>setEditSt(e.target.value)}>
-                            {STATUS_OPTS.map(s=><option key={s} value={s}>{s==='Open'?'مفتوح':'مغلق'}</option>)}
+                            {STATUS_OPTS.map(s => <option key={s} value={s}>{STATUS_LABELS[s as 'Open'|'Closed']}</option>)}
                           </select>
                         ) : (
                           <span style={{
-                            display:'inline-flex',alignItems:'center',justifyContent:'center',
-                            padding:'4px 12px',borderRadius:4,
-                            background:stStyle.bg,color:stStyle.color,
-                            fontSize:12,fontWeight:700,fontFamily:'var(--mono)'
+                            display:'inline-flex', alignItems:'center', justifyContent:'center',
+                            padding:'4px 12px', borderRadius:4,
+                            background:stStyle.bg, color:stStyle.color,
+                            fontSize:12, fontWeight:700, fontFamily:'var(--mono)'
                           }}>
-                            {row.status==='Open'?'مفتوح':'مغلق'}
+                            {STATUS_LABELS[row.status as 'Open'|'Closed'] ?? row.status}
                           </span>
                         )}
                       </td>
 
-                      {/* actions */}
                       <td>
                         {isEditing ? (
                           <div style={{display:'flex',gap:4}}>
                             <button className={styles.btnSave} onClick={saveEdit} disabled={editSaving}>
-                              {editSaving?'...':'✓ حفظ'}
+                              {editSaving ? '...' : '✓'}
                             </button>
                             <button className={styles.btnCancel} onClick={()=>setEditId(null)}>✕</button>
                           </div>
-                        ) : (
-                          (isEditor || isAdmin) ? (
-                            <div style={{display:'flex',gap:4}}>
-                              <button className={styles.btnEdit} onClick={()=>startEdit(row)}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                </svg>
-                                تعديل
-                              </button>
-                              <button className={styles.btnDel} onClick={()=>setConfirmDel(row)}>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <polyline points="3 6 5 6 21 6"/>
-                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                  <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
-                                </svg>
-                              </button>
-                            </div>
-                          ) : (
-                            <span style={{ color:'var(--text2)', fontSize:11 }}>غير مصرح</span>
-                          )
-                        )
-                        }
+                        ) : (isEditor || isAdmin) ? (
+                          <div style={{display:'flex',gap:4}}>
+                            <button className={styles.btnEdit} onClick={()=>startEdit(row)}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                              </svg>
+                              {t.common.edit}
+                            </button>
+                            <button className={styles.btnDel} onClick={()=>setConfirmDel(row)}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                              </svg>
+                            </button>
+                          </div>
+                        ) : null}
                       </td>
 
                       {/* PDF Cell */}
@@ -347,85 +328,55 @@ export default function NcrPage() {
                         {uploadingId === row.id ? (
                           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                             <div className="spinner" style={{width:16,height:16}}/>
-                            <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                            <span style={{fontSize:9,color:'var(--text3)'}}>{t.docs.pdf.uploading}</span>
                           </div>
                         ) : row.pdf_url ? (
                           <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
                             <button
-                              onClick={() => setViewingPdf({
-                                url: getCloudinaryViewerUrl(row.pdf_url!),
-                                name: row.ncr_no ?? String(row.no),
-                                directUrl: row.pdf_url!
-                              })}
-                              style={{
-                                display:'inline-flex', alignItems:'center', gap:4,
-                                padding:'4px 8px', borderRadius:4,
-                                background:'#da363318', border:'1px solid #da363344',
-                                color:'var(--red)', fontSize:11, cursor:'pointer',
-                                fontFamily:'inherit', whiteSpace:'nowrap'
-                              }}
+                              onClick={() => setViewingPdf({ url: getCloudinaryViewerUrl(row.pdf_url!), name: row.ncr_no ?? String(row.no), directUrl: row.pdf_url! })}
+                              style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:4, background:'#da363318', border:'1px solid #da363344', color:'var(--red)', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                 <polyline points="14 2 14 8 20 8"/>
                               </svg>
-                              عرض
+                              {t.common.view}
                             </button>
                             {(isEditor || isAdmin) && (
-                              <button
-                                onClick={async () => {
-                                  if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
-                                  await fetch('/api/cloudinary-delete', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ url: row.pdf_url }),
-                                  })
-                                  const { error } = await supabase
-                                    .from('non_conformance_reports')
-                                    .update({ pdf_url: null })
-                                    .eq('id', row.id)
-                                  if (error) { alert('خطأ في الحذف: ' + error.message); return }
-                                  setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r))
-                                }}
-                                style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
-                                  background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
-                              >
-                                حذف
+                              <button onClick={async () => {
+                                if (!confirm(t.docs.pdf.deleteConfirm)) return
+                                await fetch('/api/cloudinary-delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: row.pdf_url }) })
+                                const { error } = await supabase.from('non_conformance_reports').update({ pdf_url: null }).eq('id', row.id)
+                                if (error) { alert(t.docs.pdf.deleteErr + error.message); return }
+                                setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r))
+                              }} style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',background:'transparent',border:'none',fontFamily:'inherit',padding:0}}>
+                                {t.common.delete}
                               </button>
                             )}
                           </div>
                         ) : (isEditor || isAdmin) ? (
-                          <label style={{
-                            display:'inline-flex', alignItems:'center', gap:4,
-                            padding:'4px 8px', borderRadius:4,
-                            background:'var(--bg3)', border:'1px solid var(--border)',
-                            color:'var(--text2)', fontSize:11, cursor:'pointer',
-                            whiteSpace:'nowrap'
-                          }} title="رفع PDF إلى Cloudinary">
+                          <label style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:4, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:11, cursor:'pointer', whiteSpace:'nowrap' }} title={t.common.upload}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                               <polyline points="17 8 12 3 7 8"/>
                               <line x1="12" y1="3" x2="12" y2="15"/>
                             </svg>
-                            رفع PDF
+                            {t.common.upload}
                             <input type="file" accept="application/pdf" style={{display:'none'}}
                               onChange={async e => {
-                                const file = e.target.files?.[0]
-                                if (!file) return
+                                const file = e.target.files?.[0]; if (!file) return
                                 setUploadingId(row.id)
                                 const { url, error } = await uploadToCloudinary(file, 'p179/ncr')
-                                if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                                if (error) { alert(t.docs.pdf.uploadErr + error); setUploadingId(null); return }
                                 await supabase.from('non_conformance_reports').update({ pdf_url: url }).eq('id', row.id)
                                 setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r))
-                                setUploadingId(null)
-                                e.target.value = ''
+                                setUploadingId(null); e.target.value = ''
                               }}/>
                           </label>
                         ) : (
                           <span style={{color:'var(--text3)',fontSize:10}}>—</span>
                         )}
                       </td>
-
                     </tr>
                   )
                 })}
@@ -433,7 +384,7 @@ export default function NcrPage() {
             </table>
           </div>
           <div className="pagination">
-            <span style={{fontSize:11,color:'var(--text3)',marginLeft:'auto'}}>إجمالي {total} تقرير</span>
+            <span style={{fontSize:11,color:'var(--text3)',marginLeft:'auto'}}>{t.common.total} {total} {p.unit}</span>
             {Array.from({length:Math.min(pages,7)},(_,i)=>(
               <button key={i} className={`pg-btn ${page===i+1?'active':''}`} onClick={()=>setPage(i+1)}>{i+1}</button>
             ))}
@@ -441,7 +392,7 @@ export default function NcrPage() {
         </div>
       </div>
 
-      {/* PDF Viewer Modal */}
+      {/* PDF Viewer */}
       {viewingPdf && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:200,display:'flex',flexDirection:'column'}}>
           <div style={{height:48,background:'var(--bg2)',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:12,padding:'0 16px',flexShrink:0}}>
@@ -456,14 +407,14 @@ export default function NcrPage() {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              تنزيل
+              {t.common.download}
             </a>
             <button onClick={() => setViewingPdf(null)}
               style={{background:'transparent',border:'1px solid var(--border)',borderRadius:6,padding:'6px 12px',color:'var(--text2)',cursor:'pointer',fontSize:12}}>
-              ✕ إغلاق
+              {t.docs.pdf.closeViewer}
             </button>
           </div>
-          <iframe src={viewingPdf.url} style={{flex:1,border:'none',width:'100%'}} title="PDF Viewer"/>
+          <iframe src={viewingPdf.url} style={{flex:1,border:'none',width:'100%'}} title={t.docs.pdf.viewerTitle}/>
         </div>
       )}
 
@@ -472,47 +423,46 @@ export default function NcrPage() {
         <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowAdd(false)}>
           <div className="modal" style={{width:520}}>
             <div className="modal-header">
-              <div className="modal-title">إضافة تقرير NCR جديد</div>
+              <div className="modal-title">{p.addTitle}</div>
               <button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>✕</button>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 16px'}}>
               <div className="form-group">
-                <label className="form-label">رقم NCR <span style={{color:'var(--red)'}}> *</span></label>
+                <label className="form-label">{p.fields.ncrNo} <span style={{color:'var(--red)'}}>*</span></label>
                 <input className="form-input" value={newNo} onChange={e=>setNewNo(e.target.value)} placeholder="NCR-001"/>
               </div>
               <div className="form-group">
-                <label className="form-label">الحالة</label>
+                <label className="form-label">{p.fields.status}</label>
                 <select className="form-select" value={newSt} onChange={e=>setNewSt(e.target.value)}>
-                  <option value="Open">مفتوح</option>
-                  <option value="Closed">مغلق</option>
+                  {STATUS_OPTS.map(s => <option key={s} value={s}>{STATUS_LABELS[s as 'Open'|'Closed']}</option>)}
                 </select>
               </div>
               <div className="form-group" style={{gridColumn:'1/-1'}}>
-                <label className="form-label">وصف عدم المطابقة <span style={{color:'var(--red)'}}> *</span></label>
-                <input className="form-input" value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="وصف المشكلة..."/>
+                <label className="form-label">{p.fields.description} <span style={{color:'var(--red)'}}>*</span></label>
+                <input className="form-input" value={newDesc} onChange={e=>setNewDesc(e.target.value)}/>
               </div>
               <div className="form-group">
-                <label className="form-label">تاريخ الإصدار</label>
+                <label className="form-label">{p.fields.issueDate}</label>
                 <input type="date" className="form-input" value={newIssue} onChange={e=>setNewIssue(e.target.value)}/>
               </div>
               <div className="form-group">
-                <label className="form-label">تاريخ الإغلاق</label>
+                <label className="form-label">{p.fields.closeDate}</label>
                 <input type="date" className="form-input" value={newClose} onChange={e=>setNewClose(e.target.value)}/>
               </div>
               <div className="form-group">
-                <label className="form-label">الموقع</label>
-                <input className="form-input" value={newLoc} onChange={e=>setNewLoc(e.target.value)} placeholder="الموقع..."/>
+                <label className="form-label">{p.fields.location}</label>
+                <input className="form-input" value={newLoc} onChange={e=>setNewLoc(e.target.value)}/>
               </div>
               <div className="form-group">
-                <label className="form-label">ملاحظات</label>
+                <label className="form-label">{p.fields.remarks}</label>
                 <input className="form-input" value={newRem} onChange={e=>setNewRem(e.target.value)}/>
               </div>
             </div>
             {addErr && <div style={{fontSize:12,color:'var(--red)',background:'#da363318',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'8px 12px',marginBottom:12}}>{addErr}</div>}
             <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
-              <button className="btn btn-ghost" onClick={()=>setShowAdd(false)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={()=>setShowAdd(false)}>{t.common.cancel}</button>
               <button className="btn btn-primary" onClick={saveAdd} disabled={saving}>
-                {saving?<span className="spinner"/>:'حفظ التقرير'}
+                {saving ? <span className="spinner"/> : t.common.save}
               </button>
             </div>
           </div>
@@ -524,17 +474,17 @@ export default function NcrPage() {
         <div className="modal-overlay">
           <div className="modal" style={{width:400}}>
             <div className="modal-header">
-              <div className="modal-title" style={{color:'var(--red)'}}>تأكيد الحذف</div>
+              <div className="modal-title" style={{color:'var(--red)'}}>{t.common.confirmDelete}</div>
             </div>
             <div style={{background:'var(--bg3)',border:'1px solid #da363333',borderRadius:'var(--radius)',padding:16,marginBottom:20}}>
               <div style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--blue)',marginBottom:4}}>{confirmDel.ncr_no}</div>
               <div style={{fontSize:13}}>{confirmDel.description}</div>
             </div>
             <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button className="btn btn-ghost" onClick={()=>setConfirmDel(null)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={()=>setConfirmDel(null)}>{t.common.cancel}</button>
               <button style={{background:'#da363322',color:'var(--red)',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'7px 14px',fontSize:12,cursor:'pointer',fontFamily:'inherit'}}
                 onClick={()=>deleteRow(confirmDel)} disabled={deleting}>
-                {deleting?<span className="spinner"/>:'حذف نهائياً'}
+                {deleting ? <span className="spinner"/> : t.common.delete}
               </button>
             </div>
           </div>

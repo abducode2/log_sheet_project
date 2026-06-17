@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 
 export interface FieldDef {
   key: string
@@ -26,6 +27,7 @@ interface Props {
 
 export default function AddRecordModal({ table, title, fields, onClose, onSaved, autoNumber, fixedValues, onSaveAndGenerate }: Props) {
   const supabase = createClient()
+  const { t } = useLanguage()
   const [values, setValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -88,7 +90,7 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
     for (const f of fields) {
       if (fixedValues && f.key in fixedValues) continue
       const v = values[f.key] ?? ''
-      if (!v && f.required) { setError(`حقل "${f.label}" مطلوب`); return }
+      if (!v && f.required) { setError(t.common.fieldRequired.replace('{label}', f.label)); return }
       if (v === '') continue
       if (f.type === 'number') record[f.key] = Number(v)
       else record[f.key] = v
@@ -120,7 +122,7 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
     for (const f of fields) {
       if (isFixed(f.key)) continue  // already included
       const v = values[f.key] ?? ''
-      if (!v && f.required) { setError(`حقل "${f.label}" مطلوب`); setLoading(false); return }
+      if (!v && f.required) { setError(t.common.fieldRequired.replace('{label}', f.label)); setLoading(false); return }
       if (v === '') continue
       if (f.type === 'number') record[f.key] = Number(v)
       else record[f.key] = v
@@ -157,13 +159,13 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
                 {f.label}
                 {f.required && <span style={{ color:'var(--red)' }}> *</span>}
                 {autoNumber?.field === f.key && (
-                  <span style={{ color:'var(--green)', fontSize:10, marginRight:6 }}>● تلقائي</span>
+                  <span style={{ color:'var(--green)', fontSize:10, marginRight:6 }}>● {t.common.autoBadge}</span>
                 )}
                 {f.key === 'v_time' && (
-                  <span style={{ color:'var(--blue)', fontSize:10, marginRight:6 }}>● يُحسب تلقائياً</span>
+                  <span style={{ color:'var(--blue)', fontSize:10, marginRight:6 }}>● {t.docs.vtimeAuto}</span>
                 )}
                 {isFixed(f.key) && (
-                  <span style={{ color:'var(--amber)', fontSize:10, marginRight:6 }}>● ثابت</span>
+                  <span style={{ color:'var(--amber)', fontSize:10, marginRight:6 }}>● {t.common.fixedBadge}</span>
                 )}
               </label>
 
@@ -175,7 +177,7 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
                   disabled={isFixed(f.key)}
                   style={isFixed(f.key) ? { opacity:.6, cursor:'default' } : {}}
                 >
-                  <option value="">-- اختر --</option>
+                  <option value="">{t.common.selectPlaceholder}</option>
                   {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               ) : f.type === 'textarea' ? (
@@ -216,7 +218,7 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
         )}
 
         <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
-          <button className="btn btn-ghost" onClick={onClose}>إلغاء</button>
+          <button className="btn btn-ghost" onClick={onClose}>{t.common.cancel}</button>
           {onSaveAndGenerate && (
             <button className="btn btn-ghost" onClick={() => handleSaveAndGenerate()} disabled={loading}
               style={{ borderColor:'var(--green)', color:'var(--green)' }}>
@@ -227,12 +229,12 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
                   <line x1="12" y1="18" x2="12" y2="12"/>
                   <line x1="9" y1="15" x2="15" y2="15"/>
                 </svg>
-                حفظ وإنشاء النموذج
+                {t.common.saveAndGenerate}
               </>}
             </button>
           )}
           <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
-            {loading ? <span className="spinner"/> : 'حفظ السجل'}
+            {loading ? <span className="spinner"/> : t.common.saveRecord}
           </button>
         </div>
       </div>

@@ -8,9 +8,11 @@ interface Props {
   columns: string[]
   rows: CellType[][]
   href: string
+  viewAllText?: string
+  noDataText?: string
 }
 
-export default function RecentTable({ title, columns, rows, href }: Props) {
+export default function RecentTable({ title, columns, rows, href, viewAllText = 'View All →', noDataText = 'No data' }: Props) {
   function renderCell(cell: CellType) {
     switch (cell.type) {
       case 'code':    return <span className="cell-mono cell-blue">{cell.value}</span>
@@ -27,7 +29,7 @@ export default function RecentTable({ title, columns, rows, href }: Props) {
       <div className="table-header">
         <span className="table-title">{title}</span>
         <Link href={href} style={{ fontSize: 11, color: 'var(--blue)', textDecoration: 'none' }}>
-          عرض الكل ←
+          {viewAllText}
         </Link>
       </div>
       <div className="table-scroll">
@@ -40,7 +42,7 @@ export default function RecentTable({ title, columns, rows, href }: Props) {
               <tr key={i}>{row.map((cell, j) => <td key={j}>{renderCell(cell)}</td>)}</tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={columns.length} style={{ textAlign: 'center', color: 'var(--text3)', padding: '32px' }}>لا توجد بيانات</td></tr>
+              <tr><td colSpan={columns.length} style={{ textAlign: 'center', color: 'var(--text3)', padding: '32px' }}>{noDataText}</td></tr>
             )}
           </tbody>
         </table>

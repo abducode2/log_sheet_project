@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import Topbar from '@/components/layout/Topbar'
-import StatsGrid from '@/components/layout/StatsGrid'
-import RecentTable from '@/components/tables/RecentTable'
+import DashboardContent from './DashboardContent'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -25,35 +23,18 @@ export default async function DashboardPage() {
   const { data: recentShop }    = await supabase.from('shop_drawings').select('*').order('created_at', { ascending: false }).limit(5)
   const { data: recentLetters } = await supabase.from('letters_naga_rawaf').select('*').order('created_at', { ascending: false }).limit(5)
 
-  return (
-    <>
-      <Topbar title="لوحة التحكم" sub="HARAJ-IQC-ALRAWAF · P-216 · الرياض" />
-      <div className="page-content anim">
-        <StatsGrid stats={stats} />
-        <div className="two-col">
-          <RecentTable
-            title="آخر رسومات التنفيذ"
-            columns={['الكود', 'الوصف', 'العنصر', 'الحالة']}
-            rows={(recentShop ?? []).map((r: Record<string, unknown>) => [
-              { type: 'code' as const,    value: String(r.request_no ?? '') },
-              { type: 'desc' as const,    value: String(r.description ?? '') },
-              { type: 'element' as const, value: String(r.element ?? '') },
-              { type: 'status' as const,  value: String(r.ac_co ?? '') },
-            ])}
-            href="/shop-drawings"
-          />
-          <RecentTable
-            title="آخر خطابات الاستشاري ← المقاول"
-            columns={['#', 'موضوع الخطاب', 'التاريخ']}
-            rows={(recentLetters ?? []).map((r: Record<string, unknown>) => [
-              { type: 'code' as const, value: String(r.no ?? '') },
-              { type: 'desc' as const, value: String(r.subject ?? '') },
-              { type: 'date' as const, value: String(r.date ?? '') },
-            ])}
-            href="/letters/naga-rawaf"
-          />
-        </div>
-      </div>
-    </>
-  )
+  const shopRows = (recentShop ?? []).map((r: Record<string, unknown>) => [
+    { type: 'code' as const,    value: String(r.request_no ?? '') },
+    { type: 'desc' as const,    value: String(r.description ?? '') },
+    { type: 'element' as const, value: String(r.element ?? '') },
+    { type: 'status' as const,  value: String(r.ac_co ?? '') },
+  ])
+
+  const letterRows = (recentLetters ?? []).map((r: Record<string, unknown>) => [
+    { type: 'code' as const, value: String(r.no ?? '') },
+    { type: 'desc' as const, value: String(r.subject ?? '') },
+    { type: 'date' as const, value: String(r.date ?? '') },
+  ])
+
+  return <DashboardContent stats={stats} recentShop={shopRows} recentLetters={letterRows} />
 }

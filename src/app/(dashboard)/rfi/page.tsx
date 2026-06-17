@@ -1,15 +1,15 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from '@/app/(dashboard)/dashboard.module.css'
 import { generateForm } from '@/lib/utils/generateForm'
 import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
-// ── Helpers ──────────────────────────────────────────────────────
 function calcVtime(sub: string | null, app: string | null): number | null {
   if (!sub || !app) return null
   const diff = new Date(app).getTime() - new Date(sub).getTime()
@@ -17,22 +17,17 @@ function calcVtime(sub: string | null, app: string | null): number | null {
 }
 function today(): string { return new Date().toISOString().slice(0, 10) }
 
-// ── Constants ────────────────────────────────────────────────────
-const ELEMENTS = [
-  { key:'ALL',  label:'الكل',     color:'#8b949e' },
-  { key:'ARC',  label:'معماري',   color:'#4caf50' },
-  { key:'CIV',  label:'إنشائي',   color:'#64b5f6' },
-  { key:'SUR',  label:'مساحة',    color:'#ffb74d' },
-  { key:'MEC',  label:'ميكانيكي', color:'#ce93d8' },
-  { key:'ELE',  label:'كهربائي',  color:'#ef9a9a' },
-  { key:'GEN',  label:'عام',      color:'#8b949e' },
+const ELEMENT_COLORS = [
+  { key:'ALL', color:'#8b949e' },
+  { key:'ARC', color:'#4caf50' },
+  { key:'CIV', color:'#64b5f6' },
+  { key:'SUR', color:'#ffb74d' },
+  { key:'MEC', color:'#ce93d8' },
+  { key:'ELE', color:'#ef9a9a' },
+  { key:'GEN', color:'#8b949e' },
 ]
 
 const STATUS_OPTS = ['A','B','C','D','P']
-const STATUS_LABELS: Record<string,string> = {
-  A:'معتمد', B:'معتمد مع ملاحظات', C:'مراجعة وإعادة تقديم', D:'مرفوض', P:'انتظار'
-}
-// Solid background colors for status cell (like the screenshot)
 const STATUS_BG: Record<string,{bg:string;color:string}> = {
   A:{ bg:'#1a7f37', color:'#fff' },
   B:{ bg:'#1a7f37', color:'#fff' },
@@ -53,23 +48,6 @@ const RFI_PREFIX: Record<string,string> = {
   GEN:'J500-RWF-RFI-GEN-',
 }
 
-const FIELDS: FieldDef[] = [
-  { key:'element',         label:'العنصر',            type:'select', required:true,
-    options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
-  { key:'rfi_no',          label:'رقم RFI',           type:'text',   required:true,
-    prefixDynamic:{ fromField:'element', map:RFI_PREFIX } },
-  { key:'subject',         label:'الموضوع',           type:'text',   required:true },
-  { key:'submission_date', label:'تاريخ التقديم',     type:'date',   required:true },
-  { key:'rev',             label:'رقم المراجعة',      type:'number' },
-  { key:'ac_co',           label:'حالة الاعتماد',     type:'select', defaultValue:'P',
-    options:['A','B','C','D','P'] },
-  { key:'approval_date',   label:'تاريخ الاعتماد',    type:'date' },
-  { key:'v_time',          label:'V.Time (أيام)',     type:'number' },
-  { key:'remarks',         label:'ملاحظات',           type:'textarea' },
-]
-
-const PG = 20
-
 interface Row {
   id: string
   no: number
@@ -80,20 +58,19 @@ interface Row {
   submission_date: string | null
   response_date: string | null
   remarks: string | null
-parent_id: string | null
+  parent_id: string | null
   is_archived: boolean
   revision_count: number
-rev: number
-element: string
-ac_co: string
-approval_date: string | null
+  rev: number
+  element: string
+  ac_co: string
+  approval_date: string | null
   v_time: number | null
   request_no?: string
   description?: string
   pdf_url: string | null
 }
 
-// Group rows: each group = root row + all its revisions
 interface Group {
   root_request_no: string
   rows: Row[]
@@ -103,7 +80,6 @@ interface Group {
 }
 
 function groupRows(rows: Row[]): Group[] {
-  // Find root of each row (walk up parent_id chain)
   const idMap: Record<string, Row> = {}
   for (const r of rows) idMap[r.id] = r
 
@@ -126,8 +102,8 @@ function groupRows(rows: Row[]): Group[] {
       root_request_no: root.rfi_no ?? '',
       description: root.subject ?? '',
       rows: sorted,
-      no:          root.no,
-      element:     root.element,
+      no:      root.no,
+      element: root.element,
     }
   }).sort((a,b) => a.no - b.no)
 }
@@ -135,6 +111,31 @@ function groupRows(rows: Row[]): Group[] {
 export default function RfiPage() {
   const supabase = createClient()
   const { isAdmin, isEditor } = useRole()
+  const { t } = useLanguage()
+  const d = t.docs
+  const p = t.pages.rfi
+
+  const ELEMENTS = useMemo(() => ELEMENT_COLORS.map(e => ({
+    key: e.key, color: e.color,
+    label: d.elements[e.key as keyof typeof d.elements] ?? e.key,
+  })), [d])
+
+  const STATUS_LABELS: Record<string,string> = useMemo(() => ({ ...d.statusLabels }), [d])
+
+  const FIELDS = useMemo<FieldDef[]>(() => [
+    { key:'element',         label: d.fields.element,        type:'select', required:true,
+      options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
+    { key:'rfi_no',          label: p.rfiNoField,            type:'text',   required:true,
+      prefixDynamic:{ fromField:'element', map:RFI_PREFIX } },
+    { key:'subject',         label: p.subjectField,          type:'text',   required:true },
+    { key:'submission_date', label: d.fields.submissionDate, type:'date',   required:true },
+    { key:'rev',             label: d.fields.rev,            type:'number' },
+    { key:'ac_co',           label: d.fields.status,         type:'select', defaultValue:'P',
+      options:['A','B','C','D','P'] },
+    { key:'approval_date',   label: d.fields.approvalDate,   type:'date' },
+    { key:'v_time',          label: d.fields.vtime,          type:'number' },
+    { key:'remarks',         label: d.fields.remarks,        type:'textarea' },
+  ], [d, p])
 
   const [activeEl, setActiveEl]     = useState('ALL')
   const [allRows, setAllRows]       = useState<Row[]>([])
@@ -143,7 +144,6 @@ export default function RfiPage() {
   const [counts, setCounts]         = useState<Record<string,number>>({})
   const [search, setSearch]         = useState('')
   const [filterSt, setFilterSt]     = useState('')
-  // Column filters (Excel-style)
   const [colFilters, setColFilters] = useState<Record<string,string>>({
     rfi_no: '', subject: '', element: '', submission_date: '', ac_co: '', rev: ''
   })
@@ -151,34 +151,27 @@ export default function RfiPage() {
   const [loading, setLoading]       = useState(true)
   const [showAdd, setShowAdd]       = useState(false)
 
-  // Edit state
   const [editingId, setEditingId]   = useState<string|null>(null)
   const [editSt, setEditSt]         = useState('')
   const [editDate, setEditDate]     = useState('')
   const [editVtime, setEditVtime]   = useState('')
   const [saving, setSaving]         = useState(false)
 
-  // Dialogs
-  const [confirmC, setConfirmC]     = useState<Row|null>(null)
+  const [confirmC, setConfirmC]           = useState<Row|null>(null)
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
   const [deleteBlockRevs, setDeleteBlockRevs] = useState<Row[]>([])
+  const [uploadingId, setUploadingId]     = useState<string|null>(null)
+  const [viewingPdf, setViewingPdf]       = useState<{url:string;name:string;directUrl?:string}|null>(null)
 
-  const [uploadingId, setUploadingId] = useState<string|null>(null)
-  const [viewingPdf, setViewingPdf]   = useState<{url:string;name:string;directUrl?:string}|null>(null)
+  // suppress unused filterSt warning (kept for future use)
+  void filterSt
 
-  // Fetch counts (only root/non-archived for tab counts)
   const fetchCounts = useCallback(async () => {
-    // Fetch all rows with id and parent_id to find roots only
-    const { data } = await supabase
-      .from('requests_for_information')
-      .select('id, parent_id, element')
+    const { data } = await supabase.from('requests_for_information').select('id, parent_id, element')
     if (!data) return
-
     const rows = data as { id: string; parent_id: string | null; element: string }[]
-
-    // Count only root rows (no parent_id = original drawing, not a revision)
     const c: Record<string, number> = { ALL: 0 }
     for (const r of rows) {
       if (!r.parent_id) {
@@ -189,91 +182,51 @@ export default function RfiPage() {
     setCounts(c)
   }, [])
 
-  // Fetch ALL rows (including archived) to group them
   const fetchData = useCallback(async () => {
     setLoading(true)
-
-    // Fetch all rows for grouping
-    let q = supabase
-      .from('requests_for_information')
-      .select('*')
+    let q = supabase.from('requests_for_information').select('*')
       .order('request_no', { ascending: true })
       .order('rev', { ascending: true })
-
     if (activeEl !== 'ALL') q = q.eq('element', activeEl)
-
     const { data } = await q
     const rows = (data ?? []) as Row[]
-
-    // Client-side filtering across all fields
     const s = search.toLowerCase().trim()
     let filtered = rows
 
-    // Apply column filters
     filtered = filtered.filter(r => {
       for (const [col, val] of Object.entries(colFilters)) {
         if (!val) continue
         const rv = String((r as unknown as Record<string,unknown>)[col] ?? '').toLowerCase()
-        const vstr = String(val).toLowerCase()
-        if (!rv.includes(vstr)) return false
+        if (!rv.includes(String(val).toLowerCase())) return false
       }
       return true
     })
 
     if (s) {
-      // Find rows that match search
       const matchingIds = new Set(
-        rows
-          .filter(r =>
-            (r.rfi_no          ?? '').toLowerCase().includes(s) ||
-            (r.subject         ?? '').toLowerCase().includes(s) ||
-            (r.element         ?? '').toLowerCase().includes(s) ||
-            (r.ac_co           ?? '').toLowerCase().includes(s) ||
-            (r.submission_date ?? '').toLowerCase().includes(s) ||
-            (r.question        ?? '').toLowerCase().includes(s) ||
-            String(r.rev ?? '').includes(s)
-          )
-          .map(r => r.id)
+        rows.filter(r =>
+          (r.rfi_no          ?? '').toLowerCase().includes(s) ||
+          (r.subject         ?? '').toLowerCase().includes(s) ||
+          (r.element         ?? '').toLowerCase().includes(s) ||
+          (r.ac_co           ?? '').toLowerCase().includes(s) ||
+          (r.submission_date ?? '').toLowerCase().includes(s) ||
+          (r.question        ?? '').toLowerCase().includes(s) ||
+          String(r.rev ?? '').includes(s)
+        ).map(r => r.id)
       )
-      // Keep entire group if any row matches
       const matchingRoots = new Set<string>()
       for (const r of rows) {
         if (matchingIds.has(r.id)) {
-          // find root
           let cur = r
-          while (cur.parent_id && rows.find(x => x.id === cur.parent_id)) {
+          while (cur.parent_id && rows.find(x => x.id === cur.parent_id))
             cur = rows.find(x => x.id === cur.parent_id)!
-          }
           matchingRoots.add(cur.id)
         }
       }
-      // Keep all rows whose root matches
       filtered = rows.filter(r => {
         let cur = r
-        while (cur.parent_id && rows.find(x => x.id === cur.parent_id)) {
+        while (cur.parent_id && rows.find(x => x.id === cur.parent_id))
           cur = rows.find(x => x.id === cur.parent_id)!
-        }
-        return matchingRoots.has(cur.id)
-      })
-    }
-
-    // Filter by status
-    if (filterSt) {
-      const matchingRoots = new Set<string>()
-      for (const r of filtered) {
-        if (r.ac_co === filterSt) {
-          let cur = r
-          while (cur.parent_id && filtered.find(x => x.id === cur.parent_id)) {
-            cur = filtered.find(x => x.id === cur.parent_id)!
-          }
-          matchingRoots.add(cur.id)
-        }
-      }
-      filtered = filtered.filter(r => {
-        let cur = r
-        while (cur.parent_id && filtered.find(x => x.id === cur.parent_id)) {
-          cur = filtered.find(x => x.id === cur.parent_id)!
-        }
         return matchingRoots.has(cur.id)
       })
     }
@@ -283,7 +236,7 @@ export default function RfiPage() {
     setGroups(g)
     setTotal(g.length)
     setLoading(false)
-  }, [activeEl, search, filterSt, colFilters])
+  }, [activeEl, search, colFilters])
 
   useEffect(() => { fetchCounts() }, [fetchCounts])
   useEffect(() => { fetchData()  }, [fetchData])
@@ -295,7 +248,7 @@ export default function RfiPage() {
 
   function getColOptions(col: string): string[] {
     const vals = new Set<string>()
-      for (const r of allRows) {
+    for (const r of allRows) {
       const v = String(((r as unknown) as Record<string,unknown>)[col] ?? '').trim()
       if (v) vals.add(v)
     }
@@ -303,8 +256,7 @@ export default function RfiPage() {
   }
 
   async function getNextNo(): Promise<number> {
-    const { data } = await supabase
-      .from('requests_for_information').select('no')
+    const { data } = await supabase.from('requests_for_information').select('no')
       .order('no', { ascending: false }).limit(1)
     return ((data?.[0]?.no ?? 0) as number) + 1
   }
@@ -316,124 +268,90 @@ export default function RfiPage() {
     setEditVtime(row.v_time?.toString() ?? '')
   }
 
-  function onEditDateChange(d: string) {
-    setEditDate(d)
+  function onEditDateChange(dt: string) {
+    setEditDate(dt)
     const row = allRows.find(r => r.id === editingId)
-    const vt = calcVtime(row?.submission_date ?? null, d)
+    const vt = calcVtime(row?.submission_date ?? null, dt)
     if (vt !== null) setEditVtime(String(vt))
   }
 
   async function handleSave(row: Row) {
-    if (editSt === 'C') {
-      setConfirmC(row)
-      return
-    }
+    if (editSt === 'C') { setConfirmC(row); return }
     await doSave(row.id, false)
   }
 
   async function doSave(id: string, createRevision: boolean) {
     setSaving(true)
     const row = allRows.find(r => r.id === id)!
-
     if (createRevision && editSt === 'C') {
-      // Archive current
       await supabase.from('requests_for_information').update({
-        ac_co: 'C',
-        approval_date: editDate || null,
-        v_time: editVtime ? Number(editVtime) : null,
-        is_archived: true,
+        ac_co: 'C', approval_date: editDate || null,
+        v_time: editVtime ? Number(editVtime) : null, is_archived: true,
       }).eq('id', id)
-
-      // Create new revision with empty fields for inline editing
       const nextNo  = await getNextNo()
       const nextRev = (row.rev ?? 0) + 1
-      const newId   = crypto.randomUUID()
       await supabase.from('requests_for_information').insert({
-        id:              newId,
-        no:              nextNo,
-        rfi_no:          row.rfi_no,
-        subject:         row.subject,
-        element:         row.element,
-        rev:             nextRev,
-        ac_co:           'P',
-        submission_date: today(),
-        approval_date:   null,
-        v_time:          null,
-        remarks:         row.remarks,
-        parent_id:       id,
-        is_archived:     false,
-        revision_count:  nextRev,
+        id: crypto.randomUUID(), no: nextNo,
+        rfi_no: row.rfi_no, subject: row.subject,
+        element: row.element, rev: nextRev, ac_co: 'P',
+        submission_date: today(), approval_date: null, v_time: null,
+        remarks: row.remarks, parent_id: id, is_archived: false, revision_count: nextRev,
       })
-
     } else {
       await supabase.from('requests_for_information').update({
-        ac_co:         editSt,
-        approval_date: editDate || null,
-        v_time:        editVtime ? Number(editVtime) : null,
+        ac_co: editSt, approval_date: editDate || null,
+        v_time: editVtime ? Number(editVtime) : null,
       }).eq('id', id)
     }
-
-    setEditingId(null); setConfirmC(null)
-    setSaving(false)
+    setEditingId(null); setConfirmC(null); setSaving(false)
     fetchData(); fetchCounts()
   }
 
   async function deleteRow(row: Row) {
-    // Find all revisions in same group
     const group = groups.find(g => g.rows.some(r => r.id === row.id))
     const laterRevs = group?.rows.filter(r => (r.rev ?? 0) > (row.rev ?? 0)) ?? []
-
-    // Block if this row has later revisions
     if (laterRevs.length > 0) {
-      setDeleteBlockRow(row)
-      setDeleteBlockRevs(laterRevs)
-      setConfirmDel(null)
-      return
+      setDeleteBlockRow(row); setDeleteBlockRevs(laterRevs); setConfirmDel(null); return
     }
-
     setDeleting(true)
     await supabase.from('requests_for_information').delete().eq('id', row.id)
     setConfirmDel(null); setDeleting(false)
     fetchData(); fetchCounts()
   }
 
-  async function exportExcel() {
-    let q = supabase.from('requests_for_information').select('*').order('no')
-    if (activeEl !== 'ALL') q = q.eq('element', activeEl)
-    const { data: all } = await q
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.json_to_sheet(all ?? [])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'RFI')
-    XLSX.writeFile(wb, `rfi_P179.xlsx`)
-  }
+  const COL_HEADERS = useMemo(() => [
+    { key:'rfi_no',          label: p.rfiNoField,           w: undefined },
+    { key:'subject',         label: p.subjectCol,           w: undefined },
+    { key:'element',         label: d.cols.element,         w: 70 },
+    { key:'rev',             label: d.cols.rev,             w: 55 },
+    { key:'submission_date', label: d.cols.submissionDate,  w: undefined },
+    { key:'ac_co',           label: d.cols.status,          w: 160 },
+  ], [d, p])
 
   return (
     <>
       <Topbar
-        title="طلبات الاستيضاح — Request for Information"
-        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} طلب`}
+        title={p.title}
+        sub={p.sub.replace('{n}', String(counts.ALL ?? 0))}
         actions={<>
-          
           {isEditor && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              إضافة طلب RFI
+              {p.addBtn}
             </button>
           )}
         </>}
       />
 
       <div className="page-content">
-
         {/* Element Tabs */}
         <div className={styles.tabs}>
           {ELEMENTS.map(el => (
             <button key={el.key}
               className={`${styles.tab} ${activeEl === el.key ? styles.tabActive : ''}`}
-              onClick={() => { setActiveEl(el.key) }}
+              onClick={() => setActiveEl(el.key)}
               style={activeEl === el.key ? { borderColor: el.color, color: el.color } : {}}>
               <span className={styles.tabDot} style={{ background: el.color }}/>
               {el.label}
@@ -448,15 +366,12 @@ export default function RfiPage() {
             <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <input placeholder="بحث سريع في جميع الحقول..." value={search}
-              onChange={e => setSearch(e.target.value)}/>
+            <input placeholder={d.searchAll} value={search} onChange={e => setSearch(e.target.value)}/>
           </div>
           {Object.values(colFilters).some(v => v) && (
             <button className="btn btn-ghost btn-sm" onClick={() =>
               setColFilters({ rfi_no:'', subject:'', element:'', submission_date:'', ac_co:'', rev:'' })
-            }>
-              ✕ مسح الفلاتر
-            </button>
+            }>✕ {d.clearFilters}</button>
           )}
         </div>
 
@@ -464,25 +379,16 @@ export default function RfiPage() {
         <div className="table-wrap">
           <div className="table-header">
             <span className="table-title">
-              {activeEl === 'ALL' ? 'جميع العناصر' : ELEMENTS.find(e=>e.key===activeEl)?.label}
+              {activeEl === 'ALL' ? d.allElements : ELEMENTS.find(e=>e.key===activeEl)?.label}
             </span>
-            <span className="table-meta">{total} طلب</span>
+            <span className="table-meta">{total} {p.unit}</span>
           </div>
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
                   <th style={{width:40}}>#</th>
-                  {/* Excel-style filter headers */}
-                  {[
-                    { key:'rfi_no',         label:'رقم RFI',          w:undefined },
-                    { key:'subject',        label:'الموضوع',           w:undefined },
-                    { key:'element',        label:'العنصر',           w:70 },
-                    { key:'rev',            label:'Rev.',              w:55 },
-                    { key:'submission_date',label:'تاريخ التقديم',    w:undefined },
-                    { key:'ac_co',          label:'الحالة',           w:160 },
-
-                  ].map(col => (
+                  {COL_HEADERS.map(col => (
                     <th key={col.key} style={col.w ? {width:col.w} : {}} onClick={e => e.stopPropagation()}>
                       <div style={{ position:'relative' }}>
                         <button
@@ -493,35 +399,22 @@ export default function RfiPage() {
                           {col.label}
                           {colFilters[col.key]
                             ? <span className={styles.colFilterActive}>●</span>
-                            : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <polyline points="6 9 12 15 18 9"/>
-                              </svg>
+                            : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                           }
                         </button>
                         {openCol === col.key && (
                           <div className={styles.colDropdown} onClick={e => e.stopPropagation()}>
-                            <input
-                              className={styles.colSearchInput}
-                              placeholder={`بحث في ${col.label}...`}
+                            <input className={styles.colSearchInput}
+                              placeholder={`${col.label}...`}
                               value={colFilters[col.key]}
                               onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
-                              autoFocus
-                            />
+                              autoFocus/>
                             <div className={styles.colOptions}>
-                              <div
-                                className={`${styles.colOption} ${!colFilters[col.key] ? styles.colOptionActive : ''}`}
-                                onClick={() => setColFilter(col.key, '')}
-                              >
-                                الكل
-                              </div>
+                              <div className={`${styles.colOption} ${!colFilters[col.key] ? styles.colOptionActive : ''}`}
+                                onClick={() => setColFilter(col.key, '')}>{d.elements.ALL}</div>
                               {getColOptions(col.key).map(opt => (
-                                <div
-                                  key={opt}
-                                  className={`${styles.colOption} ${colFilters[col.key] === opt ? styles.colOptionActive : ''}`}
-                                  onClick={() => setColFilter(col.key, opt)}
-                                >
-                                  {opt}
-                                </div>
+                                <div key={opt} className={`${styles.colOption} ${colFilters[col.key] === opt ? styles.colOptionActive : ''}`}
+                                  onClick={() => setColFilter(col.key, opt)}>{opt}</div>
                               ))}
                             </div>
                           </div>
@@ -529,16 +422,16 @@ export default function RfiPage() {
                       </div>
                     </th>
                   ))}
-                  <th>تاريخ الاعتماد</th>
-                  <th style={{width:70}}>V.Time</th>
-                  <th style={{width:120}}>إجراء</th>
-                  <th style={{width:90}}>PDF</th>
+                  <th>{d.cols.approvalDate}</th>
+                  <th style={{width:70}}>{d.cols.vtime}</th>
+                  <th style={{width:120}}>{d.cols.action}</th>
+                  <th style={{width:90}}>{d.cols.pdf}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={11}>
-                    <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
+                    <div className="loading-overlay"><div className="spinner"/><span>{t.common.loading}</span></div>
                   </td></tr>
                 ) : groups.length === 0 ? (
                   <tr><td colSpan={11}>
@@ -547,8 +440,8 @@ export default function RfiPage() {
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
                       </svg>
-                      <div className="empty-title">لا توجد طلبات استيضاح</div>
-                      <div className="empty-sub">ابدأ بإضافة طلب RFI جديد أو استورد من Excel</div>
+                      <div className="empty-title">{p.empty}</div>
+                      <div className="empty-sub">{p.emptySub}</div>
                     </div>
                   </td></tr>
                 ) : groups.map((group, gi) => (
@@ -557,51 +450,21 @@ export default function RfiPage() {
                     const isEditing = editingId === row.id
                     const stStyle   = STATUS_BG[row.ac_co] ?? STATUS_BG['P']
                     const isLast    = ri === group.rows.length - 1
-
                     return (
                       <tr key={row.id}
                         className={ri > 0 ? styles.revRow : ''}
-                        style={{
-                          borderBottom: isLast && gi < groups.length-1
-                            ? '2px solid var(--border2)' : undefined
-                        }}>
-
-                        {/* # */}
-                        <td className="cell-mono cell-dim">
-                          {isFirst ? group.no : ''}
-                        </td>
-
-                        {/* rfi_no — show in every row */}
-                        <td className="cell-mono cell-blue">
-                          {row.rfi_no}
-                        </td>
-
-                        {/* subject — show in every row */}
-                        <td>
-                          <span className="cell-desc" title={row.subject}>
-                            {row.subject}
-                          </span>
-                        </td>
-
-                        {/* element — show in every row */}
-                        <td>
-                          <span className={`el-badge ${EL_COLOR[row.element]??'el-gen'}`}>{row.element}</span>
-                        </td>
-
-                        {/* Rev */}
+                        style={{ borderBottom: isLast && gi < groups.length-1 ? '2px solid var(--border2)' : undefined }}>
+                        <td className="cell-mono cell-dim">{isFirst ? group.no : ''}</td>
+                        <td className="cell-mono cell-blue">{row.rfi_no}</td>
+                        <td><span className="cell-desc" title={row.subject}>{row.subject}</span></td>
+                        <td><span className={`el-badge ${EL_COLOR[row.element]??'el-gen'}`}>{row.element}</span></td>
                         <td className="cell-mono cell-muted">{row.rev}</td>
-
-                        {/* Submission date */}
                         <td className="cell-mono cell-muted">{row.submission_date ?? '—'}</td>
-
-                        {/* Status — solid color like screenshot */}
                         <td style={{ padding:'6px 14px' }}>
                           {isEditing ? (
                             <select className="form-select" style={{ padding:'4px 8px', fontSize:11 }}
                               value={editSt} onChange={e => setEditSt(e.target.value)} autoFocus>
-                              {STATUS_OPTS.map(s => (
-                                <option key={s} value={s}>{s} — {STATUS_LABELS[s]}</option>
-                              ))}
+                              {STATUS_OPTS.map(s => <option key={s} value={s}>{s} — {STATUS_LABELS[s]}</option>)}
                             </select>
                           ) : (
                             <span style={{
@@ -610,47 +473,30 @@ export default function RfiPage() {
                               background: stStyle.bg, color: stStyle.color,
                               fontSize:12, fontWeight:700, letterSpacing:1,
                               minWidth:28, fontFamily:'var(--mono)'
-                            }}>
-                              {row.ac_co}
-                            </span>
+                            }}>{row.ac_co}</span>
                           )}
                         </td>
-
-                        {/* Approval date */}
                         <td>
                           {isEditing ? (
-                            <input type="date" className="form-input"
-                              style={{ padding:'4px 8px', fontSize:11 }}
+                            <input type="date" className="form-input" style={{ padding:'4px 8px', fontSize:11 }}
                               value={editDate} onChange={e => onEditDateChange(e.target.value)}/>
-                          ) : (
-                            <span className="cell-mono cell-muted">{row.approval_date ?? '—'}</span>
-                          )}
+                          ) : <span className="cell-mono cell-muted">{row.approval_date ?? '—'}</span>}
                         </td>
-
-                        
-                        {/* V.Time */}
                         <td>
                           {isEditing ? (
                             <input type="number" readOnly className="form-input"
                               style={{ padding:'4px 8px', fontSize:11, width:60, opacity:.7, cursor:'default' }}
-                              value={editVtime} title="يُحسب تلقائياً"/>
+                              value={editVtime} title={d.vtimeAuto}/>
                           ) : (
-                            <span className="cell-mono" style={{
-                              color: row.v_time == null ? 'var(--text3)'
-                                   : row.v_time > 14   ? 'var(--amber)'
-                                   : 'var(--green)'
-                            }}>
+                            <span className="cell-mono" style={{ color: row.v_time == null ? 'var(--text3)' : row.v_time > 14 ? 'var(--amber)' : 'var(--green)' }}>
                               {row.v_time != null ? `${row.v_time}` : '—'}
                             </span>
                           )}
                         </td>
-
-                        {/* Actions */}
                         <td>
                           {isEditing ? (
                             <div style={{ display:'flex', gap:4 }}>
-                              <button className={styles.btnSave}
-                                onClick={() => handleSave(row)} disabled={saving}>
+                              <button className={styles.btnSave} onClick={() => handleSave(row)} disabled={saving}>
                                 {saving ? '...' : '✓'}
                               </button>
                               <button className={styles.btnCancel} onClick={() => setEditingId(null)}>✕</button>
@@ -662,10 +508,9 @@ export default function RfiPage() {
                                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                                 </svg>
-                                تعديل
+                                {t.common.edit}
                               </button>
-                              <button className={styles.btnDel}
-                                onClick={() => setConfirmDel(row)} title="حذف">
+                              <button className={styles.btnDel} onClick={() => setConfirmDel(row)} title={t.common.delete}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <polyline points="3 6 5 6 21 6"/>
                                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -681,86 +526,49 @@ export default function RfiPage() {
                           {uploadingId === row.id ? (
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                               <div className="spinner" style={{width:16,height:16}}/>
-                              <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                              <span style={{fontSize:9,color:'var(--text3)'}}>{d.pdf.uploading}</span>
                             </div>
                           ) : row.pdf_url ? (
                             <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
                               <button
-                                onClick={() => setViewingPdf({
-                                  url: getCloudinaryViewerUrl(row.pdf_url!),
-                                  name: row.rfi_no ?? String(row.no),
-                                  directUrl: row.pdf_url!
-                                })}
-                                style={{
-                                  display:'inline-flex', alignItems:'center', gap:4,
-                                  padding:'4px 8px', borderRadius:4,
-                                  background:'#da363318', border:'1px solid #da363344',
-                                  color:'var(--red)', fontSize:11, cursor:'pointer',
-                                  fontFamily:'inherit', whiteSpace:'nowrap'
-                                }}
+                                onClick={() => setViewingPdf({ url: getCloudinaryViewerUrl(row.pdf_url!), name: row.rfi_no ?? String(row.no), directUrl: row.pdf_url! })}
+                                style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:4, background:'#da363318', border:'1px solid #da363344', color:'var(--red)', fontSize:11, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap' }}
                               >
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                   <polyline points="14 2 14 8 20 8"/>
                                 </svg>
-                                عرض
+                                {t.common.view}
                               </button>
                               {(isEditor || isAdmin) && (
-                                <button
-                                  onClick={async () => {
-                                    if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
-                                    await fetch('/api/cloudinary-delete', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ url: row.pdf_url }),
-                                    })
-                                    const { error } = await supabase
-                                      .from('requests_for_information')
-                                      .update({ pdf_url: null })
-                                      .eq('id', row.id)
-                                    if (error) { alert('خطأ في الحذف: ' + error.message); return }
-                                    setAllRows(prev => {
-                                      const next = prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r)
-                                      setGroups(groupRows(next))
-                                      return next
-                                    })
-                                  }}
-                                  style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
-                                    background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
-                                >
-                                  حذف
+                                <button onClick={async () => {
+                                  if (!confirm(d.pdf.deleteConfirm)) return
+                                  await fetch('/api/cloudinary-delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: row.pdf_url }) })
+                                  const { error } = await supabase.from('requests_for_information').update({ pdf_url: null }).eq('id', row.id)
+                                  if (error) { alert(d.pdf.deleteErr + error.message); return }
+                                  setAllRows(prev => { const next = prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r); setGroups(groupRows(next)); return next })
+                                }} style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',background:'transparent',border:'none',fontFamily:'inherit',padding:0}}>
+                                  {t.common.delete}
                                 </button>
                               )}
                             </div>
                           ) : (isEditor || isAdmin) ? (
-                            <label style={{
-                              display:'inline-flex', alignItems:'center', gap:4,
-                              padding:'4px 8px', borderRadius:4,
-                              background:'var(--bg3)', border:'1px solid var(--border)',
-                              color:'var(--text2)', fontSize:11, cursor:'pointer',
-                              whiteSpace:'nowrap'
-                            }} title="رفع PDF إلى Cloudinary">
+                            <label style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:4, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:11, cursor:'pointer', whiteSpace:'nowrap' }} title={t.common.upload}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                 <polyline points="17 8 12 3 7 8"/>
                                 <line x1="12" y1="3" x2="12" y2="15"/>
                               </svg>
-                              رفع PDF
+                              {t.common.upload}
                               <input type="file" accept="application/pdf" style={{display:'none'}}
                                 onChange={async e => {
-                                  const file = e.target.files?.[0]
-                                  if (!file) return
+                                  const file = e.target.files?.[0]; if (!file) return
                                   setUploadingId(row.id)
                                   const { url, error } = await uploadToCloudinary(file, 'p179/rfi')
-                                  if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                                  if (error) { alert(d.pdf.uploadErr + error); setUploadingId(null); return }
                                   await supabase.from('requests_for_information').update({ pdf_url: url }).eq('id', row.id)
-                                  setAllRows(prev => {
-                                    const next = prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r)
-                                    setGroups(groupRows(next))
-                                    return next
-                                  })
-                                  setUploadingId(null)
-                                  e.target.value = ''
+                                  setAllRows(prev => { const next = prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r); setGroups(groupRows(next)); return next })
+                                  setUploadingId(null); e.target.value = ''
                                 }}/>
                             </label>
                           ) : (
@@ -777,198 +585,96 @@ export default function RfiPage() {
         </div>
       </div>
 
-      {/* PDF Viewer Modal */}
+      {/* PDF Viewer */}
       {viewingPdf && (
-        <div style={{
-          position:'fixed', inset:0, background:'rgba(0,0,0,.85)',
-          zIndex:200, display:'flex', flexDirection:'column',
-        }}>
-          <div style={{
-            height:48, background:'var(--bg2)', borderBottom:'1px solid var(--border)',
-            display:'flex', alignItems:'center', gap:12, padding:'0 16px', flexShrink:0
-          }}>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.85)', zIndex:200, display:'flex', flexDirection:'column' }}>
+          <div style={{ height:48, background:'var(--bg2)', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:12, padding:'0 16px', flexShrink:0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
-            <span style={{fontSize:13, fontWeight:600, color:'var(--text)', flex:1}}>
-              {viewingPdf.name}
-            </span>
-            <a
-              href={viewingPdf.directUrl ?? viewingPdf.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display:'inline-flex', alignItems:'center', gap:6,
-                padding:'6px 12px', borderRadius:6,
-                background:'var(--accent)', color:'#fff',
-                fontSize:12, textDecoration:'none'
-              }}
-            >
+            <span style={{fontSize:13, fontWeight:600, color:'var(--text)', flex:1}}>{viewingPdf.name}</span>
+            <a href={viewingPdf.directUrl ?? viewingPdf.url} target="_blank" rel="noopener noreferrer"
+              style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:6, background:'var(--accent)', color:'#fff', fontSize:12, textDecoration:'none' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              تنزيل
+              {t.common.download}
             </a>
-            <button
-              onClick={() => setViewingPdf(null)}
-              style={{
-                background:'transparent', border:'1px solid var(--border)',
-                borderRadius:6, padding:'6px 12px',
-                color:'var(--text2)', cursor:'pointer', fontSize:12
-              }}
-            >
-              ✕ إغلاق
+            <button onClick={() => setViewingPdf(null)}
+              style={{ background:'transparent', border:'1px solid var(--border)', borderRadius:6, padding:'6px 12px', color:'var(--text2)', cursor:'pointer', fontSize:12 }}>
+              ✕ {d.pdf.closeViewer}
             </button>
           </div>
-          <iframe
-            src={viewingPdf.url}
-            style={{ flex:1, border:'none', width:'100%' }}
-            title="PDF Viewer"
-          />
+          <iframe src={viewingPdf.url} style={{ flex:1, border:'none', width:'100%' }} title={d.pdf.viewerTitle}/>
         </div>
       )}
 
-      {/* Add Modal */}
       {showAdd && (
-        <AddRecordModal
-          table="requests_for_information" title="إضافة طلب RFI جديد"
+        <AddRecordModal table="requests_for_information" title={p.addBtn}
           fields={FIELDS} onClose={() => setShowAdd(false)}
           onSaved={() => { fetchData(); fetchCounts() }}
           autoNumber={{ field:'no', getNext: getNextNo }}
-          onSaveAndGenerate={record => generateForm({ docType:'RFI', titleAr:'طلب استيضاح', fields:FIELDS, record })}
-        />
+          onSaveAndGenerate={record => generateForm({ docType:'RFI', titleAr:'طلب استيضاح', fields:FIELDS, record })}/>
       )}
 
-      {/* Confirm C — simple confirm, editing happens inline in table */}
+      {/* Revision confirm (status C) */}
       {confirmC && (
         <div className="modal-overlay">
           <div className="modal" style={{ width:440 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ color:'var(--amber)' }}>
-                ⚠ تأكيد: مراجعة وإعادة تقديم
-              </div>
+              <div className="modal-title" style={{ color:'var(--amber)' }}>{d.revision.title}</div>
             </div>
-            <div style={{
-              background:'var(--bg3)', border:'1px solid #9e6a0333',
-              borderRadius:'var(--radius)', padding:16, marginBottom:20, fontSize:12,
-            }}>
-              <div style={{ color:'var(--text2)', marginBottom:12 }}>
-                سيُؤرشف الطلب الحالي بحالة C وتُضاف مراجعة جديدة في الجدول مباشرة:
-              </div>
+            <div style={{ background:'var(--bg3)', border:'1px solid #9e6a0333', borderRadius:'var(--radius)', padding:16, marginBottom:20, fontSize:12 }}>
+              <div style={{ color:'var(--text2)', marginBottom:12 }}>{d.revision.body}</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-                <div style={{ background:'#da363318', border:'1px solid #da363333',
-                  borderRadius:'var(--radius-sm)', padding:'8px 12px' }}>
+                <div style={{ background:'#da363318', border:'1px solid #da363333', borderRadius:'var(--radius-sm)', padding:'8px 12px' }}>
                   <div style={{ color:'var(--text3)', fontSize:10, marginBottom:4 }}>يُؤرشف</div>
-                  <div style={{ fontFamily:'var(--mono)', color:'var(--red)', fontWeight:700 }}>
-                    REV.{confirmC.rev}
-                  </div>
-                  <div style={{ color:'var(--text3)', fontSize:11, marginTop:2 }}>حالة C</div>
+                  <div style={{ fontFamily:'var(--mono)', color:'var(--red)', fontWeight:700 }}>REV.{confirmC.rev}</div>
                 </div>
-                <div style={{ background:'#3fb95018', border:'1px solid #3fb95033',
-                  borderRadius:'var(--radius-sm)', padding:'8px 12px' }}>
-                  <div style={{ color:'var(--text3)', fontSize:10, marginBottom:4 }}>يُنشأ في الجدول</div>
-                  <div style={{ fontFamily:'var(--mono)', color:'var(--green)', fontWeight:700 }}>
-                    REV.{(confirmC.rev??0)+1}
-                  </div>
-                  <div style={{ color:'var(--text3)', fontSize:11, marginTop:2 }}>
-                    قابل للتعديل مباشرة
-                  </div>
+                <div style={{ background:'#3fb95018', border:'1px solid #3fb95033', borderRadius:'var(--radius-sm)', padding:'8px 12px' }}>
+                  <div style={{ color:'var(--text3)', fontSize:10, marginBottom:4 }}>يُنشأ</div>
+                  <div style={{ fontFamily:'var(--mono)', color:'var(--green)', fontWeight:700 }}>REV.{(confirmC.rev??0)+1}</div>
                 </div>
               </div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button className="btn btn-ghost"
-                onClick={() => { setConfirmC(null); setEditingId(null) }}>
-                إلغاء
-              </button>
-              <button className="btn btn-ghost"
-                style={{ borderColor:'var(--amber)', color:'var(--amber)' }}
-                onClick={() => doSave(confirmC.id, false)}>
-                حفظ C فقط
-              </button>
-              <button className="btn btn-primary"
-                onClick={() => doSave(confirmC.id, true)} disabled={saving}>
-                {saving ? <span className="spinner"/> : '✓ إنشاء مراجعة في الجدول'}
+              <button className="btn btn-ghost" onClick={() => { setConfirmC(null); setEditingId(null) }}>{t.common.cancel}</button>
+              <button className="btn btn-ghost" style={{ borderColor:'var(--amber)', color:'var(--amber)' }} onClick={() => doSave(confirmC.id, false)}>{d.revision.saveOnly}</button>
+              <button className="btn btn-primary" onClick={() => doSave(confirmC.id, true)} disabled={saving}>
+                {saving ? <span className="spinner"/> : '✓ ' + d.revision.createRevision}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Blocked — has later revisions */}
+      {/* Can't delete */}
       {deleteBlockRow && (
         <div className="modal-overlay">
           <div className="modal" style={{ width:460 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ color:'var(--red)' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  style={{ display:'inline', verticalAlign:'middle', marginLeft:8 }}>
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-                لا يمكن الحذف
-              </div>
+              <div className="modal-title" style={{ color:'var(--red)' }}>{d.cantDelete.title}</div>
             </div>
-
-            {/* Warning message */}
-            <div style={{
-              background:'#da363318', border:'1px solid #da363344',
-              borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:20,
-              fontSize:13, color:'var(--text)',
-            }}>
-              الطلب
-              <span style={{ fontFamily:'var(--mono)', color:'var(--blue)', margin:'0 6px' }}>
-                REV.{deleteBlockRow.rev}
-              </span>
-              مرتبط بمراجعات لاحقة ولا يمكن حذفه.
+            <div style={{ background:'#da363318', border:'1px solid #da363344', borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:20, fontSize:13, color:'var(--text)' }}>
+              {d.cantDelete.body}
             </div>
-
-            {/* List of blocking revisions */}
             <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:11, color:'var(--text3)', marginBottom:10,
-                textTransform:'uppercase', letterSpacing:'.06em', fontWeight:600 }}>
-                المراجعات المرتبطة
+              <div style={{ fontSize:11, color:'var(--text3)', marginBottom:10, textTransform:'uppercase', letterSpacing:'.06em', fontWeight:600 }}>
+                {d.cantDelete.revisions}
               </div>
               {deleteBlockRevs.map(r => (
-                <div key={r.id} style={{
-                  display:'flex', alignItems:'center', gap:12,
-                  background:'var(--bg3)', border:'1px solid var(--border)',
-                  borderRadius:'var(--radius-sm)', padding:'10px 14px', marginBottom:6,
-                }}>
-                  <span style={{
-                    fontFamily:'var(--mono)', fontWeight:700, fontSize:13,
-                    color: r.ac_co === 'B' || r.ac_co === 'A' ? 'var(--green)'
-                         : r.ac_co === 'C' ? 'var(--amber)' : 'var(--text2)',
-                  }}>
-                    REV.{r.rev}
-                  </span>
-                  <span style={{
-                    display:'inline-flex', alignItems:'center',
-                    padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:600,
-                    background: r.ac_co === 'B' || r.ac_co === 'A' ? '#1a7f37'
-                              : r.ac_co === 'C' ? '#da3633' : '#444',
-                    color:'#fff',
-                  }}>{r.ac_co}</span>
-                  <span style={{ fontSize:12, color:'var(--text2)', flex:1 }}>
-                    {r.submission_date ?? '—'}
-                  </span>
+                <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'var(--radius-sm)', padding:'10px 14px', marginBottom:6 }}>
+                  <span style={{ fontFamily:'var(--mono)', fontWeight:700, color: r.ac_co==='B'||r.ac_co==='A' ? 'var(--green)' : r.ac_co==='C' ? 'var(--amber)' : 'var(--text2)' }}>REV.{r.rev}</span>
+                  <span style={{ padding:'2px 10px', borderRadius:20, fontSize:11, fontWeight:600, background: r.ac_co==='B'||r.ac_co==='A' ? '#1a7f37' : r.ac_co==='C' ? '#da3633' : '#444', color:'#fff' }}>{r.ac_co}</span>
+                  <span style={{ fontSize:12, color:'var(--text2)', flex:1 }}>{r.submission_date ?? '—'}</span>
                 </div>
               ))}
             </div>
-
-            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:20 }}>
-              💡 لحذف هذا الطلب احذف المراجعات الأحدث أولاً بالترتيب من الأعلى.
-            </div>
-
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:20 }}>💡 {d.cantDelete.tip}</div>
             <div style={{ display:'flex', justifyContent:'flex-end' }}>
-              <button className="btn btn-primary" onClick={() => {
-                setDeleteBlockRow(null); setDeleteBlockRevs([])
-              }}>
-                حسناً، فهمت
-              </button>
+              <button className="btn btn-primary" onClick={() => { setDeleteBlockRow(null); setDeleteBlockRevs([]) }}>{d.cantDelete.ok}</button>
             </div>
           </div>
         </div>
@@ -979,25 +685,18 @@ export default function RfiPage() {
         <div className="modal-overlay">
           <div className="modal" style={{ width:420 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ color:'var(--red)' }}>تأكيد الحذف</div>
+              <div className="modal-title" style={{ color:'var(--red)' }}>{t.common.confirmDelete}</div>
             </div>
-            <div style={{ background:'var(--bg3)', border:'1px solid #da363333',
-              borderRadius:'var(--radius)', padding:16, marginBottom:20 }}>
-              <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--blue)', marginBottom:4 }}>
-                {confirmDel.rfi_no}
-              </div>
+            <div style={{ background:'var(--bg3)', border:'1px solid #da363333', borderRadius:'var(--radius)', padding:16, marginBottom:20 }}>
+              <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--blue)', marginBottom:4 }}>{confirmDel.rfi_no}</div>
               <div style={{ fontSize:13, marginBottom:8 }}>{confirmDel.subject}</div>
-              <div style={{ fontSize:11, color:'var(--text3)' }}>
-                REV.{confirmDel.rev} · {confirmDel.element} · {confirmDel.ac_co}
-              </div>
+              <div style={{ fontSize:11, color:'var(--text3)' }}>REV.{confirmDel.rev} · {confirmDel.element} · {confirmDel.ac_co}</div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>إلغاء</button>
-              <button style={{ background:'#da363322', color:'var(--red)', border:'1px solid #da363344',
-                borderRadius:'var(--radius-sm)', padding:'7px 14px', fontSize:12, cursor:'pointer',
-                fontFamily:'inherit' }}
+              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>{t.common.cancel}</button>
+              <button style={{ background:'#da363322', color:'var(--red)', border:'1px solid #da363344', borderRadius:'var(--radius-sm)', padding:'7px 14px', fontSize:12, cursor:'pointer', fontFamily:'inherit' }}
                 onClick={() => deleteRow(confirmDel)} disabled={deleting}>
-                {deleting ? <span className="spinner"/> : 'حذف نهائياً'}
+                {deleting ? <span className="spinner"/> : t.common.delete}
               </button>
             </div>
           </div>

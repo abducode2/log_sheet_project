@@ -16,6 +16,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             try {
               var t = localStorage.getItem('p216-theme') || 'dark';
               document.documentElement.setAttribute('data-theme', t);
+              var l = localStorage.getItem('p216-lang') || 'ar';
+              document.documentElement.setAttribute('lang', l);
+              document.documentElement.setAttribute('dir', l === 'en' ? 'ltr' : 'rtl');
             } catch(e){}
           })();
         `}}/>

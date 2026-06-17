@@ -2,8 +2,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRole } from '@/lib/hooks/useRole'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import Topbar from '@/components/layout/Topbar'
-import { redirect } from 'next/navigation'
 
 interface Profile {
   id: string
@@ -13,11 +13,6 @@ interface Profile {
   created_at: string
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  admin:  'مدير النظام',
-  editor: 'محرر',
-  viewer: 'مشاهد',
-}
 const ROLE_BG: Record<string, { bg: string; color: string }> = {
   admin:  { bg:'#1f6feb',   color:'#fff' },
   editor: { bg:'#1a7f37',   color:'#fff' },
@@ -27,6 +22,8 @@ const ROLE_BG: Record<string, { bg: string; color: string }> = {
 export default function UsersPage() {
   const supabase = createClient()
   const { role, loading: roleLoading, isAdmin } = useRole()
+  const { t } = useLanguage()
+  const p = t.pages.users
 
   const [users, setUsers]       = useState<Profile[]>([])
   const [loading, setLoading]   = useState(true)
@@ -60,8 +57,8 @@ export default function UsersPage() {
     return (
       <div className="page-content" style={{ textAlign:'center', paddingTop:80 }}>
         <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
-        <div style={{ fontSize:18, fontWeight:600, marginBottom:8 }}>غير مصرح</div>
-        <div style={{ color:'var(--text2)' }}>هذه الصفحة مخصصة لمدير النظام فقط</div>
+        <div style={{ fontSize:18, fontWeight:600, marginBottom:8 }}>{t.common.unauthorized}</div>
+        <div style={{ color:'var(--text2)' }}>{t.common.unauthorizedSub}</div>
       </div>
     )
   }
@@ -73,8 +70,8 @@ export default function UsersPage() {
   }
 
   async function addUser() {
-    if (!newEmail || !newPass) { setAddErr('البريد وكلمة المرور مطلوبان'); return }
-    if (newPass.length < 6)   { setAddErr('كلمة المرور 6 أحرف على الأقل'); return }
+    if (!newEmail || !newPass) { setAddErr(p.requiredError); return }
+    if (newPass.length < 6)   { setAddErr(p.passLengthError); return }
     setAdding(true); setAddErr('')
     
     // Create user via Supabase Auth (needs service role — use signup for now)
@@ -104,15 +101,15 @@ export default function UsersPage() {
   return (
     <>
       <Topbar
-        title="إدارة المستخدمين"
-        sub={`${users.length} مستخدم`}
+        title={p.title}
+        sub={p.sub.replace('{n}', String(users.length))}
         actions={
           isAdmin ? (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              إضافة مستخدم
+              {p.addBtn}
             </button>
           ) : null
         }
@@ -121,35 +118,31 @@ export default function UsersPage() {
 
         {/* Legend */}
         <div style={{ display:'flex', gap:12, marginBottom:20, flexWrap:'wrap' }}>
-          {Object.entries(ROLE_LABELS).map(([r, label]) => (
+          {(Object.keys(p.roles) as Array<keyof typeof p.roles>).map(r => (
             <div key={r} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
               <span style={{
-                background: ROLE_BG[r].bg, color: ROLE_BG[r].color,
+                background: ROLE_BG[r]?.bg ?? '#444', color: ROLE_BG[r]?.color ?? '#fff',
                 padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600
-              }}>{label}</span>
-              <span style={{ color:'var(--text2)' }}>
-                {r==='admin'  ? '— يرى ويضيف ويعدل ويحذف' :
-                 r==='editor' ? '— يرى ويضيف ويعدل فقط' :
-                               '— يرى فقط'}
-              </span>
+              }}>{p.roles[r]}</span>
+              <span style={{ color:'var(--text2)' }}>{p.rolesDesc[r]}</span>
             </div>
           ))}
         </div>
 
         <div className="table-wrap">
           <div className="table-header">
-            <span className="table-title">قائمة المستخدمين</span>
-            <span className="table-meta">{users.length} مستخدم</span>
+            <span className="table-title">{p.tableTitle}</span>
+            <span className="table-meta">{users.length}</span>
           </div>
           <table>
             <thead>
               <tr>
                 <th>#</th>
-                <th>الاسم</th>
-                <th>البريد الإلكتروني</th>
-                <th style={{width:130}}>الصلاحية</th>
-                <th>تاريخ الإنشاء</th>
-                <th style={{width:130}}>إجراء</th>
+                <th>{p.cols.name}</th>
+                <th>{p.cols.email}</th>
+                <th style={{width:130}}>{p.cols.role}</th>
+                <th>{p.cols.createdAt}</th>
+                <th style={{width:130}}>{p.cols.action}</th>
               </tr>
             </thead>
             <tbody>
@@ -175,9 +168,9 @@ export default function UsersPage() {
                       {isEditing ? (
                         <select className="form-select" style={{padding:'4px 8px',fontSize:11}}
                           value={editRole} onChange={e=>setEditRole(e.target.value)}>
-                          <option value="admin">مدير النظام</option>
-                          <option value="editor">محرر</option>
-                          <option value="viewer">مشاهد</option>
+                          <option value="admin">{p.roles.admin}</option>
+                          <option value="editor">{p.roles.editor}</option>
+                          <option value="viewer">{p.roles.viewer}</option>
                         </select>
                       ) : (
                         <span style={{
@@ -186,7 +179,7 @@ export default function UsersPage() {
                           background: rb.bg, color: rb.color,
                           fontSize:11, fontWeight:600
                         }}>
-                          {ROLE_LABELS[u.role] ?? u.role}
+                          {p.roles[u.role as keyof typeof p.roles] ?? u.role}
                         </span>
                       )}
                     </td>
@@ -197,7 +190,7 @@ export default function UsersPage() {
                       {isEditing ? (
                         <div style={{display:'flex',gap:4}}>
                           <button className="btn btn-primary btn-sm" onClick={()=>saveEdit(u.id)} disabled={saving}>
-                            {saving?'...':'✓ حفظ'}
+                            {saving?'...':'✓ ' + t.common.save}
                           </button>
                           <button className="btn btn-ghost btn-sm" onClick={()=>setEditId(null)}>✕</button>
                         </div>
@@ -211,7 +204,7 @@ export default function UsersPage() {
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                               </svg>
-                              تعديل
+                              {t.common.edit}
                             </button>
                             <button
                               style={{
@@ -228,7 +221,7 @@ export default function UsersPage() {
                             </button>
                           </div>
                         ) : (
-                          <span style={{ color:'var(--text2)', fontSize:11 }}>غير مصرح</span>
+                          <span style={{ color:'var(--text2)', fontSize:11 }}>—</span>
                         )
                       )}
                     </td>
@@ -245,36 +238,36 @@ export default function UsersPage() {
         <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setShowAdd(false)}>
           <div className="modal" style={{width:460}}>
             <div className="modal-header">
-              <div className="modal-title">إضافة مستخدم جديد</div>
+              <div className="modal-title">{p.addTitle}</div>
               <button className="btn btn-ghost btn-sm" onClick={()=>setShowAdd(false)}>✕</button>
             </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 16px'}}>
               <div className="form-group" style={{gridColumn:'1/-1'}}>
-                <label className="form-label">الاسم الكامل</label>
-                <input className="form-input" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="محمد العمري"/>
+                <label className="form-label">{p.nameField}</label>
+                <input className="form-input" value={newName} onChange={e=>setNewName(e.target.value)}/>
               </div>
               <div className="form-group" style={{gridColumn:'1/-1'}}>
-                <label className="form-label">البريد الإلكتروني <span style={{color:'var(--red)'}}>*</span></label>
+                <label className="form-label">{p.emailField} <span style={{color:'var(--red)'}}>*</span></label>
                 <input type="email" className="form-input" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="user@rawaf.com"/>
               </div>
               <div className="form-group">
-                <label className="form-label">كلمة المرور <span style={{color:'var(--red)'}}>*</span></label>
-                <input type="password" className="form-input" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="6 أحرف على الأقل"/>
+                <label className="form-label">{p.passField} <span style={{color:'var(--red)'}}>*</span></label>
+                <input type="password" className="form-input" value={newPass} onChange={e=>setNewPass(e.target.value)}/>
               </div>
               <div className="form-group">
-                <label className="form-label">الصلاحية</label>
+                <label className="form-label">{p.roleField}</label>
                 <select className="form-select" value={newRole} onChange={e=>setNewRole(e.target.value)}>
-                  <option value="viewer">مشاهد — يرى فقط</option>
-                  <option value="editor">محرر — يضيف ويعدل</option>
-                  <option value="admin">مدير — كامل الصلاحيات</option>
+                  <option value="viewer">{p.roles.viewer}</option>
+                  <option value="editor">{p.roles.editor}</option>
+                  <option value="admin">{p.roles.admin}</option>
                 </select>
               </div>
             </div>
             {addErr && <div style={{fontSize:12,color:'var(--red)',background:'#da363318',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'8px 12px',marginBottom:12}}>{addErr}</div>}
             <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
-              <button className="btn btn-ghost" onClick={()=>setShowAdd(false)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={()=>setShowAdd(false)}>{t.common.cancel}</button>
                <button className="btn btn-primary" onClick={addUser} disabled={adding}>
-                {adding?<span className="spinner"/>:'إنشاء الحساب'}
+                {adding?<span className="spinner"/>:p.addBtn2}
               </button> 
             </div>
           </div>
@@ -286,17 +279,17 @@ export default function UsersPage() {
         <div className="modal-overlay">
           <div className="modal" style={{width:400}}>
             <div className="modal-header">
-              <div className="modal-title" style={{color:'var(--red)'}}>تأكيد الحذف</div>
+              <div className="modal-title" style={{color:'var(--red)'}}>{t.common.confirmDelete}</div>
             </div>
             <div style={{background:'var(--bg3)',border:'1px solid #da363333',borderRadius:'var(--radius)',padding:16,marginBottom:20}}>
               <div style={{fontWeight:600,marginBottom:4}}>{confirmDel.full_name || '—'}</div>
               <div style={{fontSize:12,color:'var(--blue)'}}>{confirmDel.email}</div>
             </div>
             <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <button className="btn btn-ghost" onClick={()=>setConfirmDel(null)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={()=>setConfirmDel(null)}>{t.common.cancel}</button>
               <button style={{background:'#da363322',color:'var(--red)',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'7px 14px',fontSize:12,cursor:'pointer',fontFamily:'inherit'}}
                 onClick={()=>deleteUser(confirmDel)} disabled={deleting}>
-                {deleting?<span className="spinner"/>:'حذف'}
+                {deleting?<span className="spinner"/>:t.common.delete}
               </button>
             </div>
           </div>

@@ -1,9 +1,10 @@
 
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
+import { useLanguage } from '@/lib/i18n/LanguageContext'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from '@/app/(dashboard)/dashboard.module.css'
@@ -17,20 +18,17 @@ function calcVtime(sub: string | null, app: string | null): number | null {
 }
 function today(): string { return new Date().toISOString().slice(0, 10) }
 
-const ELEMENTS = [
-  { key:'ALL', label:'الكل',     color:'#8b949e' },
-  { key:'ARC',  label:'معماري',   color:'#4caf50' },
-  { key:'CIV',  label:'إنشائي',   color:'#64b5f6' },
-  { key:'SUR',  label:'مساحة',    color:'#ffb74d' },
-  { key:'MEC',  label:'ميكانيكي', color:'#ce93d8' },
-  { key:'ELE',  label:'كهربائي',  color:'#ef9a9a' },
-  { key:'GEN', label:'عام',      color:'#8b949e' },
+const ELEMENT_COLORS = [
+  { key:'ALL', color:'#8b949e' },
+  { key:'ARC', color:'#4caf50' },
+  { key:'CIV', color:'#64b5f6' },
+  { key:'SUR', color:'#ffb74d' },
+  { key:'MEC', color:'#ce93d8' },
+  { key:'ELE', color:'#ef9a9a' },
+  { key:'GEN', color:'#8b949e' },
 ]
 
 const STATUS_OPTS = ['A','B','C','D','P']
-const STATUS_LABELS: Record<string,string> = {
-  A:'معتمد', B:'معتمد مع ملاحظات', C:'مراجعة وإعادة تقديم', D:'مرفوض', P:'انتظار'
-}
 const STATUS_BG: Record<string,{bg:string;color:string}> = {
   A:{ bg:'#1a7f37', color:'#fff' },
   B:{ bg:'#1a7f37', color:'#fff' },
@@ -52,19 +50,6 @@ const SPQ_PREFIX: Record<string,string> = {
   ELE:'J500-RWF-SPQ-ELE-',
   GEN:'J500-RWF-SPQ-GEN-',
 }
-
-const FIELDS  = [
-  { key:'element',        label:'العنصر',         type:'select', required:true, options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
-  { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true,
-    prefixDynamic:{ fromField:'element', map:SPQ_PREFIX } },
-  { key:'description',    label:'وصف المادة',     type:'text',   required:true },
-  { key:'submission_date',label:'تاريخ التقديم',  type:'date',   required:true },
-  { key:'rev',            label:'رقم المراجعة',   type:'number' },
-  { key:'status',         label:'حالة الاعتماد',  type:'select', defaultValue:'P', options:['A','B','C','D','P'] },
-  { key:'approval_date',  label:'تاريخ الاعتماد', type:'date' },
-  { key:'v_time',         label:'V.Time (أيام)',  type:'number' },
-  { key:'remarks',        label:'ملاحظات',        type:'textarea' },
-]as FieldDef[]
 
 interface Row {
   id: string
@@ -117,7 +102,7 @@ function groupRows(rows: Row[]): Group[] {
       root_request_no: root.request_no,
       rows: sorted,
       no:          root.no,
-      description: root.supplier_name ?? "",
+      description: root.supplier_name ?? '',
       element:     root.element,
     }
   }).sort((a,b) => a.no - b.no)
@@ -126,6 +111,29 @@ function groupRows(rows: Row[]): Group[] {
 export default function SupplierPage() {
   const supabase = createClient()
   const { isAdmin, isEditor } = useRole()
+  const { t } = useLanguage()
+  const d = t.docs
+  const p = t.pages.supplier
+
+  const ELEMENTS = useMemo(() => ELEMENT_COLORS.map(e => ({
+    key: e.key, color: e.color,
+    label: d.elements[e.key as keyof typeof d.elements] ?? e.key,
+  })), [d])
+
+  const STATUS_LABELS: Record<string,string> = useMemo(() => ({ ...d.statusLabels }), [d])
+
+  const FIELDS = useMemo<FieldDef[]>(() => [
+    { key:'element',         label: d.fields.element,        type:'select', required:true, options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
+    { key:'request_no',      label: d.fields.requestNo,      type:'text',   required:true,
+      prefixDynamic:{ fromField:'element', map:SPQ_PREFIX } },
+    { key:'description',     label: p.descField,             type:'text',   required:true },
+    { key:'submission_date', label: d.fields.submissionDate, type:'date',   required:true },
+    { key:'rev',             label: d.fields.rev,            type:'number' },
+    { key:'status',          label: d.fields.status,         type:'select', defaultValue:'P', options:['A','B','C','D','P'] },
+    { key:'approval_date',   label: d.fields.approvalDate,   type:'date' },
+    { key:'v_time',          label: d.fields.vtime,          type:'number' },
+    { key:'remarks',         label: d.fields.remarks,        type:'textarea' },
+  ], [d, p])
 
   const [activeEl, setActiveEl]     = useState('ALL')
   const [allRows, setAllRows]       = useState<Row[]>([])
@@ -180,7 +188,7 @@ export default function SupplierPage() {
     const s = search.toLowerCase().trim()
     let filtered = rows
 
-      filtered = filtered.filter(r => {
+    filtered = filtered.filter(r => {
       for (const [col, val] of Object.entries(colFilters)) {
         if (!val) continue
         const rv = String((r as unknown as Record<string,unknown>)[col] ?? '').toLowerCase()
@@ -256,10 +264,10 @@ export default function SupplierPage() {
     setEditVtime(row.v_time?.toString() ?? '')
   }
 
-  function onEditDateChange(d: string) {
-    setEditDate(d)
+  function onEditDateChange(dt: string) {
+    setEditDate(dt)
     const row = allRows.find(r => r.id === editingId)
-    const vt = calcVtime(row?.submission_date ?? null, d)
+    const vt = calcVtime(row?.submission_date ?? null, dt)
     if (vt !== null) setEditVtime(String(vt))
   }
 
@@ -306,28 +314,27 @@ export default function SupplierPage() {
     fetchData(); fetchCounts()
   }
 
-
-  const COL_HEADERS = [
-    { key:'request_no',     label:'رقم الطلب',     w:undefined },
-    { key:'description', },   // removed description col
-    { key:'element',        label:'العنصر',        w:70 },
-    { key:'rev',            label:'Rev.',          w:55 },
-    { key:'submission_date',label:'تاريخ التقديم', w:undefined },
-    { key:'status',         label:'الحالة',        w:160 },
-  ]
+  const COL_HEADERS = useMemo(() => [
+    { key:'request_no',      label: d.cols.requestNo,       w: undefined },
+    { key:'description',     label: p.descCol,              w: undefined },
+    { key:'element',         label: d.cols.element,         w: 70 },
+    { key:'rev',             label: d.cols.rev,             w: 55 },
+    { key:'submission_date', label: d.cols.submissionDate,  w: undefined },
+    { key:'status',          label: d.cols.status,          w: 160 },
+  ], [d, p])
 
   return (
     <>
       <Topbar
-        title="تأهيل الموردين — Supplier Pre-Qualification"
-        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} مورد`}
+        title={p.title}
+        sub={p.sub.replace('{n}', String(counts.ALL ?? 0))}
         actions={<>
           {isEditor && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              إضافة مورد
+              {p.addBtn}
             </button>
           )}
         </>}
@@ -354,13 +361,13 @@ export default function SupplierPage() {
             <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
-            <input placeholder="بحث سريع في جميع الحقول..." value={search}
+            <input placeholder={d.searchAll} value={search}
               onChange={e => setSearch(e.target.value)}/>
           </div>
           {Object.values(colFilters).some(v => v) && (
             <button className="btn btn-ghost btn-sm" onClick={() =>
               setColFilters({ request_no:'', supplier_name:'', trade:'', element:'', submission_date:'', status:'', rev:'' })
-            }>✕ مسح الفلاتر</button>
+            }>✕ {d.clearFilters}</button>
           )}
         </div>
 
@@ -368,25 +375,16 @@ export default function SupplierPage() {
         <div className="table-wrap">
           <div className="table-header">
             <span className="table-title">
-              {activeEl === 'ALL' ? 'جميع العناصر' : ELEMENTS.find(e=>e.key===activeEl)?.label}
+              {activeEl === 'ALL' ? d.allElements : ELEMENTS.find(e=>e.key===activeEl)?.label}
             </span>
-            <span className="table-meta">{total} مادة</span>
+            <span className="table-meta">{total} {p.unit}</span>
           </div>
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-
                   <th style={{width:40}}>#</th>
-{/* Excel-style filter headers */}
-                  {[
-                    { key:'request_no',     label:'رقم الطلب',       w:undefined },
-                    { key:'description',    label:'الوصف',       w:undefined },
-                    { key:'element',        label:'العنصر',          w:70 },
-                    { key:'rev',            label:'Rev.',             w:55 },
-                    { key:'submission_date',label:'تاريخ التقديم',   w:undefined },
-                    { key:'ac_co',          label:'الحالة',          w:160 },
-                  ].map(col => (
+                  {COL_HEADERS.map(col => (
                     <th key={col.key} style={col.w ? {width:col.w} : {}} onClick={e => e.stopPropagation()}>
                       <div style={{ position:'relative' }}>
                         <button
@@ -406,7 +404,7 @@ export default function SupplierPage() {
                           <div className={styles.colDropdown} onClick={e => e.stopPropagation()}>
                             <input
                               className={styles.colSearchInput}
-                              placeholder={`بحث في ${col.label}...`}
+                              placeholder={`${col.label}...`}
                               value={colFilters[col.key]}
                               onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
                               autoFocus
@@ -416,7 +414,7 @@ export default function SupplierPage() {
                                 className={`${styles.colOption} ${!colFilters[col.key] ? styles.colOptionActive : ''}`}
                                 onClick={() => setColFilter(col.key, '')}
                               >
-                                الكل
+                                {d.elements.ALL}
                               </div>
                               {getColOptions(col.key).map(opt => (
                                 <div
@@ -433,16 +431,16 @@ export default function SupplierPage() {
                       </div>
                     </th>
                   ))}
-                  <th>تاريخ الاعتماد</th>
-                  <th style={{width:70}}>V.Time</th>
-                  <th style={{width:120}}>إجراء</th>
-                  <th style={{width:90}}>PDF</th>
+                  <th>{d.cols.approvalDate}</th>
+                  <th style={{width:70}}>{d.cols.vtime}</th>
+                  <th style={{width:120}}>{d.cols.action}</th>
+                  <th style={{width:90}}>{d.cols.pdf}</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={11}>
-                    <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
+                    <div className="loading-overlay"><div className="spinner"/><span>{t.common.loading}</span></div>
                   </td></tr>
                 ) : groups.length === 0 ? (
                   <tr><td colSpan={11}>
@@ -451,8 +449,8 @@ export default function SupplierPage() {
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
                       </svg>
-                      <div className="empty-title">لا يوجد موردون</div>
-                      <div className="empty-sub">ابدأ بإضافة مورد جديد أو استورد من Excel</div>
+                      <div className="empty-title">{p.empty}</div>
+                      <div className="empty-sub">{p.emptySub}</div>
                     </div>
                   </td></tr>
                 ) : groups.map((group, gi) => (
@@ -498,7 +496,7 @@ export default function SupplierPage() {
                           {isEditing ? (
                             <input type="number" readOnly className="form-input"
                               style={{ padding:'4px 8px', fontSize:11, width:60, opacity:.7, cursor:'default' }}
-                              value={editVtime} title="يُحسب تلقائياً"/>
+                              value={editVtime} title={d.vtimeAuto}/>
                           ) : (
                             <span className="cell-mono" style={{
                               color: row.v_time == null ? 'var(--text3)' : row.v_time > 14 ? 'var(--amber)' : 'var(--green)'
@@ -521,9 +519,9 @@ export default function SupplierPage() {
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                                   </svg>
-                                  تعديل
+                                  {t.common.edit}
                                 </button>
-                                <button className={styles.btnDel} onClick={() => setConfirmDel(row)} title="حذف">
+                                <button className={styles.btnDel} onClick={() => setConfirmDel(row)} title={t.common.delete}>
                                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <polyline points="3 6 5 6 21 6"/>
                                     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -532,10 +530,9 @@ export default function SupplierPage() {
                                 </button>
                               </div>
                             ) : (
-                              <span style={{ color:'var(--text2)', fontSize:11 }}>غير مصرح</span>
+                              <span style={{ color:'var(--text2)', fontSize:11 }}>—</span>
                             )
-                          )
-                        }
+                          )}
                         </td>
 
                         {/* PDF Cell */}
@@ -543,7 +540,7 @@ export default function SupplierPage() {
                           {uploadingId === row.id ? (
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
                               <div className="spinner" style={{width:16,height:16}}/>
-                              <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                              <span style={{fontSize:9,color:'var(--text3)'}}>{d.pdf.uploading}</span>
                             </div>
                           ) : row.pdf_url ? (
                             <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
@@ -565,12 +562,12 @@ export default function SupplierPage() {
                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                                   <polyline points="14 2 14 8 20 8"/>
                                 </svg>
-                                عرض
+                                {t.common.view}
                               </button>
                               {(isEditor || isAdmin) && (
                                 <button
                                   onClick={async () => {
-                                    if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
+                                    if (!confirm(d.pdf.deleteConfirm)) return
                                     await fetch('/api/cloudinary-delete', {
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
@@ -580,7 +577,7 @@ export default function SupplierPage() {
                                       .from(TABLE)
                                       .update({ pdf_url: null })
                                       .eq('id', row.id)
-                                    if (error) { alert('خطأ في الحذف: ' + error.message); return }
+                                    if (error) { alert(d.pdf.deleteErr + error.message); return }
                                     setAllRows(prev => {
                                       const next = prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r)
                                       setGroups(groupRows(next))
@@ -590,7 +587,7 @@ export default function SupplierPage() {
                                   style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
                                     background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
                                 >
-                                  حذف
+                                  {t.common.delete}
                                 </button>
                               )}
                             </div>
@@ -601,20 +598,20 @@ export default function SupplierPage() {
                               background:'var(--bg3)', border:'1px solid var(--border)',
                               color:'var(--text2)', fontSize:11, cursor:'pointer',
                               whiteSpace:'nowrap'
-                            }} title="رفع PDF إلى Cloudinary">
+                            }} title={t.common.upload}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                 <polyline points="17 8 12 3 7 8"/>
                                 <line x1="12" y1="3" x2="12" y2="15"/>
                               </svg>
-                              رفع PDF
+                              {t.common.upload}
                               <input type="file" accept="application/pdf" style={{display:'none'}}
                                 onChange={async e => {
                                   const file = e.target.files?.[0]
                                   if (!file) return
                                   setUploadingId(row.id)
                                   const { url, error } = await uploadToCloudinary(file, 'p179/supplier-prequalifications')
-                                  if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                                  if (error) { alert(d.pdf.uploadErr + error); setUploadingId(null); return }
                                   await supabase.from(TABLE).update({ pdf_url: url }).eq('id', row.id)
                                   setAllRows(prev => {
                                     const next = prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r)
@@ -672,7 +669,7 @@ export default function SupplierPage() {
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              تنزيل
+              {t.common.download}
             </a>
             <button
               onClick={() => setViewingPdf(null)}
@@ -682,33 +679,34 @@ export default function SupplierPage() {
                 color:'var(--text2)', cursor:'pointer', fontSize:12
               }}
             >
-              ✕ إغلاق
+              ✕ {d.pdf.closeViewer}
             </button>
           </div>
           <iframe
             src={viewingPdf.url}
             style={{ flex:1, border:'none', width:'100%' }}
-            title="PDF Viewer"
+            title={d.pdf.viewerTitle}
           />
         </div>
       )}
 
       {showAdd && (
-        <AddRecordModal table={TABLE} title="إضافة مورد جديد"
+        <AddRecordModal table={TABLE} title={p.addBtn}
           fields={FIELDS} onClose={() => setShowAdd(false)}
           onSaved={() => { fetchData(); fetchCounts() }}
           autoNumber={{ field:'no', getNext: getNextNo }}
           onSaveAndGenerate={(record: Record<string, unknown>) => generateForm({ docType:'SPQ', titleAr:'تأهيل الموردين', fields:FIELDS, record })}/>
       )}
 
+      {/* Revision confirm (status C) */}
       {confirmC && (
         <div className="modal-overlay">
           <div className="modal" style={{ width:440 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ color:'var(--amber)' }}>⚠ تأكيد: مراجعة وإعادة تقديم</div>
+              <div className="modal-title" style={{ color:'var(--amber)' }}>{d.revision.title}</div>
             </div>
             <div style={{ background:'var(--bg3)', border:'1px solid #9e6a0333', borderRadius:'var(--radius)', padding:16, marginBottom:20, fontSize:12 }}>
-              <div style={{ color:'var(--text2)', marginBottom:12 }}>سيُؤرشف السجل الحالي بحالة C وتُضاف مراجعة جديدة في الجدول:</div>
+              <div style={{ color:'var(--text2)', marginBottom:12 }}>{d.revision.body}</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 <div style={{ background:'#da363318', border:'1px solid #da363333', borderRadius:'var(--radius-sm)', padding:'8px 12px' }}>
                   <div style={{ color:'var(--text3)', fontSize:10, marginBottom:4 }}>يُؤرشف</div>
@@ -721,24 +719,25 @@ export default function SupplierPage() {
               </div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button className="btn btn-ghost" onClick={() => { setConfirmC(null); setEditingId(null) }}>إلغاء</button>
-              <button className="btn btn-ghost" style={{ borderColor:'var(--amber)', color:'var(--amber)' }} onClick={() => doSave(confirmC.id, false)}>حفظ C فقط</button>
+              <button className="btn btn-ghost" onClick={() => { setConfirmC(null); setEditingId(null) }}>{t.common.cancel}</button>
+              <button className="btn btn-ghost" style={{ borderColor:'var(--amber)', color:'var(--amber)' }} onClick={() => doSave(confirmC.id, false)}>{d.revision.saveOnly}</button>
               <button className="btn btn-primary" onClick={() => doSave(confirmC.id, true)} disabled={saving}>
-                {saving ? <span className="spinner"/> : '✓ إنشاء مراجعة'}
+                {saving ? <span className="spinner"/> : '✓ ' + d.revision.createRevision}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Can't delete (has later revisions) */}
       {deleteBlockRow && (
         <div className="modal-overlay">
           <div className="modal" style={{ width:460 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ color:'var(--red)' }}>لا يمكن الحذف</div>
+              <div className="modal-title" style={{ color:'var(--red)' }}>{d.cantDelete.title}</div>
             </div>
             <div style={{ background:'#da363318', border:'1px solid #da363344', borderRadius:'var(--radius)', padding:'12px 16px', marginBottom:20, fontSize:13 }}>
-              السجل <span style={{ fontFamily:'var(--mono)', color:'var(--blue)', margin:'0 6px' }}>REV.{deleteBlockRow.rev}</span> مرتبط بمراجعات لاحقة ولا يمكن حذفه.
+              {d.cantDelete.body}
             </div>
             <div style={{ marginBottom:20 }}>
               {deleteBlockRevs.map(r => (
@@ -749,19 +748,20 @@ export default function SupplierPage() {
                 </div>
               ))}
             </div>
-            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:20 }}>💡 احذف المراجعات الأحدث أولاً.</div>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:20 }}>💡 {d.cantDelete.tip}</div>
             <div style={{ display:'flex', justifyContent:'flex-end' }}>
-              <button className="btn btn-primary" onClick={() => { setDeleteBlockRow(null); setDeleteBlockRevs([]) }}>حسناً، فهمت</button>
+              <button className="btn btn-primary" onClick={() => { setDeleteBlockRow(null); setDeleteBlockRevs([]) }}>{d.cantDelete.ok}</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Confirm Delete */}
       {confirmDel && (
         <div className="modal-overlay">
           <div className="modal" style={{ width:420 }}>
             <div className="modal-header">
-              <div className="modal-title" style={{ color:'var(--red)' }}>تأكيد الحذف</div>
+              <div className="modal-title" style={{ color:'var(--red)' }}>{t.common.confirmDelete}</div>
             </div>
             <div style={{ background:'var(--bg3)', border:'1px solid #da363333', borderRadius:'var(--radius)', padding:16, marginBottom:20 }}>
               <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--blue)', marginBottom:4 }}>{confirmDel.request_no}</div>
@@ -769,10 +769,10 @@ export default function SupplierPage() {
               <div style={{ fontSize:11, color:'var(--text3)' }}>REV.{confirmDel.rev} · {confirmDel.element} · {confirmDel.status}</div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>إلغاء</button>
+              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>{t.common.cancel}</button>
               <button style={{ background:'#da363322', color:'var(--red)', border:'1px solid #da363344', borderRadius:'var(--radius-sm)', padding:'7px 14px', fontSize:12, cursor:'pointer', fontFamily:'inherit' }}
                 onClick={() => deleteRow(confirmDel)} disabled={deleting}>
-                {deleting ? <span className="spinner"/> : 'حذف نهائياً'}
+                {deleting ? <span className="spinner"/> : t.common.delete}
               </button>
             </div>
           </div>
