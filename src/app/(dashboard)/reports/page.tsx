@@ -227,7 +227,7 @@ export default function ReportsPage() {
           <div class="section-title">
             <span class="dot" style="background:${sec.dot}"></span>
             ${sec.label}
-            <span class="badge">${sec.count ?? rows.length} سجل</span>
+            <span class="badge">${(sec as any).count ?? rows.length} سجل</span>
           </div>
           <table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>
         </div>`
