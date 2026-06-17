@@ -5,9 +5,11 @@ import { translations, type Lang, type Translations } from './translations'
 const STORAGE_KEY = 'p216-lang'
 const DEFAULT: Lang = 'ar'
 
+type TranslationValue = (typeof translations)[Lang]
+
 interface LanguageCtx {
   lang: Lang
-  t: Translations
+  t: TranslationValue
   setLang: (l: Lang) => void
 }
 
